@@ -10,7 +10,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import type { StudyMaterial } from '../types';
-import { CATEGORY_LABELS } from '../types';
+import { getCategoryMeta } from '../types';
 
 interface MaterialCardProps {
   material: StudyMaterial;
@@ -42,7 +42,7 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
     });
   };
 
-  const categoryMeta = CATEGORY_LABELS[material.file_type] || CATEGORY_LABELS.other;
+  const categoryMeta = getCategoryMeta(material.file_type);
   const downloadUrl = `https://drive.google.com/uc?export=download&id=${material.drive_file_id}`;
 
   return (

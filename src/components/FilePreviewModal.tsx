@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, Download, ExternalLink, FileText, HardDrive, Calendar, BookOpen } from 'lucide-react';
+import { X, Download, ExternalLink, FileText } from 'lucide-react';
 import type { StudyMaterial } from '../types';
-import { CATEGORY_LABELS } from '../types';
+import { getCategoryMeta } from '../types';
 
 interface FilePreviewModalProps {
   material: StudyMaterial | null;
@@ -13,7 +13,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ material, on
 
   const viewUrl = `https://drive.google.com/file/d/${material.drive_file_id}/preview`;
   const directDownloadUrl = `https://drive.google.com/uc?export=download&id=${material.drive_file_id}`;
-  const categoryMeta = CATEGORY_LABELS[material.file_type] || CATEGORY_LABELS.other;
+  const categoryMeta = getCategoryMeta(material.file_type);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in">
@@ -32,6 +32,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ material, on
                 <span className="text-indigo-400 font-bold">{material.course_code}</span>
                 {material.faculty_initial && <span>• {material.faculty_initial}</span>}
                 <span>• {material.semester}</span>
+                <span className="text-purple-400">• {categoryMeta.label}</span>
               </div>
             </div>
           </div>

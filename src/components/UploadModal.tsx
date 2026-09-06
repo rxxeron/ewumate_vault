@@ -8,15 +8,11 @@ import {
   Sparkles, 
   GraduationCap, 
   BookOpen, 
-  Calendar, 
-  Layers,
-  Smartphone,
-  Check
+  Smartphone
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import type { MaterialType } from '../types';
-import { CATEGORY_LABELS } from '../types';
+import { KNOWN_FILE_TYPES, getCategoryMeta } from '../types';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -38,7 +34,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [files, setFiles] = useState<File[]>([]);
-  const [fileType, setFileType] = useState<MaterialType>('mid_question');
+  const [fileType, setFileType] = useState<string>('Mid Questions');
   const [courseCode, setCourseCode] = useState('');
   const [facultyInitial, setFacultyInitial] = useState('');
   const [semester, setSemester] = useState('summer2026');
@@ -56,7 +52,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     fetchSemesters();
   }, []);
 
-  // Course autocomplete
   useEffect(() => {
     if (courseCode.trim().length < 2) {
       setCourseSuggestions([]);
@@ -105,7 +100,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Intercept if unauthenticated
   if (!user) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -189,7 +183,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       let completed = 0;
 
       for (const file of files) {
-        // Step 1: Request Drive Upload URL from Supabase Edge Function
         let driveFileId = 'fallback-local-' + Date.now();
         let driveAccountId = 'primary';
 
@@ -203,7 +196,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           });
 
           if (!edgeError && edgeData?.uploadUrl) {
-            // Upload directly to Drive resumable endpoint
             const driveRes = await fetch(edgeData.uploadUrl, {
               method: 'PUT',
               body: file
@@ -224,7 +216,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           console.warn('Direct drive edge invocation notice:', edgeErr);
         }
 
-        // Step 2: Insert into study_materials
         const { error: dbError } = await supabase
           .from('study_materials')
           .insert({
@@ -237,7 +228,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             drive_file_id: driveFileId,
             file_name: file.name,
             file_size_bytes: file.size,
-            status: 'approved' // Automatically approved or pending
+            status: 'approved'
           });
 
         if (dbError) throw dbError;
@@ -259,7 +250,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div className="relative w-full max-w-xl bg-slate-900 border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
-        {/* Close */}
         <button
           onClick={onClose}
           className="absolute top-5 right-5 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
@@ -268,7 +258,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         </button>
 
         {successCount !== null ? (
-          /* Post-Upload Success Screen + EWUmate App Promotion */
           <div className="text-center py-6 animate-fade-in">
             <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8" />
@@ -278,10 +267,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               Upload Successful!
             </h3>
             <p className="text-sm text-slate-300 max-w-md mx-auto mb-6">
-              Thank you for contributing {successCount} {successCount === 1 ? 'material' : 'materials'} to the EWUmate Vault! Your batchmates will thank you.
+              Thank you for contributing {successCount} {successCount === 1 ? 'material' : 'materials'} to the EWUmate Vault!
             </p>
 
-            {/* Exciting App Promotion Box */}
             <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-900/60 to-indigo-900/60 border border-purple-500/30 text-left mb-6 relative overflow-hidden">
               <div className="flex items-center gap-2 text-purple-300 font-extrabold text-xs uppercase tracking-wider mb-2">
                 <Sparkles className="w-4 h-4 text-purple-400" />
@@ -317,7 +305,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </button>
           </div>
         ) : (
-          /* Normal Upload Form */
           <div>
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
@@ -341,7 +328,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             )}
 
             <form onSubmit={handleUploadSubmit} className="space-y-4">
-              {/* Drag & Drop File Zone */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
                   Select Files (PDFs, Slides, Images, Notes)
@@ -370,7 +356,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   </p>
                 </div>
 
-                {/* Selected files list */}
                 {files.length > 0 && (
                   <div className="mt-3 space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
                     {files.map((f, i) => (
@@ -397,7 +382,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 )}
               </div>
 
-              {/* Course Code Autocomplete */}
+              {/* Course Code */}
               <div className="relative">
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
                   Course Code (e.g. CSE106, MAT101)
@@ -437,7 +422,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 )}
               </div>
 
-              {/* Faculty Initial & Semester Grid */}
+              {/* Faculty Initial & Semester */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">
@@ -478,18 +463,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 </label>
                 <select
                   value={fileType}
-                  onChange={(e) => setFileType(e.target.value as MaterialType)}
+                  onChange={(e) => setFileType(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white focus:outline-none focus:border-purple-500 transition-all"
                 >
-                  {(Object.keys(CATEGORY_LABELS) as MaterialType[]).map((cat) => (
+                  {KNOWN_FILE_TYPES.map((cat) => (
                     <option key={cat} value={cat}>
-                      {CATEGORY_LABELS[cat].label}
+                      {getCategoryMeta(cat).label}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={isUploading}

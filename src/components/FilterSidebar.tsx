@@ -5,13 +5,9 @@ import {
   Calendar, 
   GraduationCap, 
   RotateCcw,
-  BookOpen,
-  FileQuestion,
-  Sparkles,
-  Check
+  BookOpen
 } from 'lucide-react';
-import type { MaterialType } from '../types';
-import { CATEGORY_LABELS } from '../types';
+import { getCategoryMeta } from '../types';
 
 interface FilterSidebarProps {
   selectedCourse: string;
@@ -20,13 +16,13 @@ interface FilterSidebarProps {
   onSelectSemester: (semester: string) => void;
   selectedFaculty: string;
   onSelectFaculty: (faculty: string) => void;
-  selectedCategory: MaterialType | 'all';
-  onSelectCategory: (cat: MaterialType | 'all') => void;
+  selectedCategory: string;
+  onSelectCategory: (cat: string) => void;
   onResetFilters: () => void;
   availableCourses: { code: string; count: number }[];
   availableSemesters: { code: string; title: string; count: number }[];
   availableFaculties: { initial: string; count: number }[];
-  categoryCounts: Record<string, number>;
+  availableCategories: { type: string; count: number }[];
   totalCount: number;
 }
 
@@ -43,7 +39,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   availableCourses,
   availableSemesters,
   availableFaculties,
-  categoryCounts,
+  availableCategories,
   totalCount
 }) => {
   const isFiltered = 
@@ -74,13 +70,13 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
         )}
       </div>
 
-      {/* Category Pills */}
+      {/* Material Types Filter */}
       <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-3">
         <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5 text-purple-400" />
           <span>Material Types</span>
         </h3>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
           <button
             onClick={() => onSelectCategory('all')}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -95,21 +91,20 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
             </span>
           </button>
 
-          {(Object.keys(CATEGORY_LABELS) as MaterialType[]).map((cat) => {
-            const count = categoryCounts[cat] || 0;
-            if (count === 0 && selectedCategory !== cat) return null;
-            const isSelected = selectedCategory === cat;
+          {availableCategories.map(({ type, count }) => {
+            const meta = getCategoryMeta(type);
+            const isSelected = selectedCategory === type;
             return (
               <button
-                key={cat}
-                onClick={() => onSelectCategory(cat)}
+                key={type}
+                onClick={() => onSelectCategory(type)}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                   isSelected
                     ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 font-bold'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
                 }`}
               >
-                <span className="truncate">{CATEGORY_LABELS[cat].label}</span>
+                <span className="truncate">{meta.label}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-400 shrink-0 ml-2">
                   {count}
                 </span>

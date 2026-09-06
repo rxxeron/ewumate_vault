@@ -1,19 +1,14 @@
 import React from 'react';
 import { 
   X, 
-  User, 
   GraduationCap, 
-  Award, 
   FileText, 
-  Calendar, 
   Download, 
   Eye, 
-  BookOpen,
-  CheckCircle2,
   HardDrive
 } from 'lucide-react';
 import type { Contributor, StudyMaterial } from '../types';
-import { CATEGORY_LABELS } from '../types';
+import { getCategoryMeta } from '../types';
 
 interface ContributorProfileModalProps {
   contributor: Contributor | null;
@@ -120,7 +115,7 @@ export const ContributorProfileModal: React.FC<ContributorProfileModalProps> = (
             </div>
           ) : (
             contributorUploads.map((item) => {
-              const categoryMeta = CATEGORY_LABELS[item.file_type] || CATEGORY_LABELS.other;
+              const categoryMeta = getCategoryMeta(item.file_type);
               const downloadUrl = `https://drive.google.com/uc?export=download&id=${item.drive_file_id}`;
 
               return (

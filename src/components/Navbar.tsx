@@ -7,18 +7,17 @@ import {
   User, 
   LogOut, 
   Award, 
-  Sparkles,
-  CheckCircle,
-  ExternalLink
+  Archive
 } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface NavbarProps {
   user: SupabaseUser | null;
+  currentView: 'archive' | 'contributors';
+  onNavigate: (view: 'archive' | 'contributors') => void;
   onOpenUpload: () => void;
   onOpenAuth: () => void;
   onOpenAppModal: () => void;
-  onOpenLeaderboard: () => void;
   onSignOut: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -27,10 +26,11 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   user,
+  currentView,
+  onNavigate,
   onOpenUpload,
   onOpenAuth,
   onOpenAppModal,
-  onOpenLeaderboard,
   onSignOut,
   searchQuery,
   onSearchChange,
@@ -40,49 +40,73 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/80 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-4">
         {/* Logo & Brand */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-800 flex items-center justify-center shadow-lg shadow-purple-600/30 ring-1 ring-purple-400/30">
-            <Vault className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg font-black tracking-tight text-white">EWUmate</span>
-              <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                Vault
-              </span>
+        <div className="flex items-center gap-4 shrink-0">
+          <div 
+            onClick={() => onNavigate('archive')}
+            className="flex items-center gap-3 cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-800 flex items-center justify-center shadow-lg shadow-purple-600/30 ring-1 ring-purple-400/30 group-hover:scale-105 transition-transform">
+              <Vault className="w-5 h-5 text-white" />
             </div>
-            <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              Public Question & Materials Archive
-            </p>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-black tracking-tight text-white">EWUmate</span>
+                <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                  Vault
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+                Public Materials Archive
+              </p>
+            </div>
           </div>
+
+          {/* Navigation View Switcher */}
+          <nav className="hidden sm:flex items-center gap-1 ml-4 pl-4 border-l border-slate-800">
+            <button
+              onClick={() => onNavigate('archive')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === 'archive'
+                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>Archive</span>
+            </button>
+
+            <button
+              onClick={() => onNavigate('contributors')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === 'contributors'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <span>Contributors</span>
+            </button>
+          </nav>
         </div>
 
-        {/* Global Instant Search */}
-        <div className="flex-1 max-w-md hidden md:block">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search course code (CSE106), faculty, or question..."
-              className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-800/80 border border-slate-700/80 text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
-            />
+        {/* Global Instant Search (Archive view only) */}
+        {currentView === 'archive' && (
+          <div className="flex-1 max-w-md hidden md:block">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Search course code (CSE106), faculty, or question..."
+                className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-800/80 border border-slate-700/80 text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Nav Actions */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Top Contributors Button */}
-          <button
-            onClick={onOpenLeaderboard}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60 transition-all"
-            title="View Top Contributors"
-          >
-            <Award className="w-4 h-4 text-amber-400" />
-            <span>Contributors</span>
-          </button>
-
           {/* EWUmate App CTA */}
           <button
             onClick={onOpenAppModal}
