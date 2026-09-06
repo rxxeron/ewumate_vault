@@ -8,7 +8,11 @@ import {
   Sparkles, 
   GraduationCap, 
   BookOpen, 
-  Smartphone
+  Smartphone,
+  Calendar,
+  Layers,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -23,6 +27,15 @@ interface UploadModalProps {
   onUploadSuccess: () => void;
 }
 
+interface UploadItem {
+  file: File;
+  fileType: string;
+  semester: string;
+  progress: number;
+  status: 'pending' | 'uploading' | 'saving' | 'done' | 'failed';
+  error?: string;
+}
+
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
   onClose,
@@ -33,18 +46,24 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [files, setFiles] = useState<File[]>([]);
-  const [fileType, setFileType] = useState<string>('Mid Questions');
+  // Global Default Form Settings
+  const [defaultSemester, setDefaultSemester] = useState('summer2026');
+  const [defaultFileType, setDefaultFileType] = useState('Mid Questions');
   const [courseCode, setCourseCode] = useState('');
   const [facultyInitial, setFacultyInitial] = useState('');
-  const [semester, setSemester] = useState('summer2026');
 
+  // Bulk File List with individual metadata
+  const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Autocomplete suggestions
   const [semesterOptions, setSemesterOptions] = useState<{ code: string; title: string }[]>([]);
   const [courseSuggestions, setCourseSuggestions] = useState<{ code: string; name: string }[]>([]);
   const [showCourseSuggestions, setShowCourseSuggestions] = useState(false);
 
+  // Uploading state
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [overallProgress, setOverallProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
 
@@ -52,6 +71,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     fetchSemesters();
   }, []);
 
+  // Course autocomplete
   useEffect(() => {
     if (courseCode.trim().length < 2) {
       setCourseSuggestions([]);
@@ -81,20 +101,24 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         .order('code', { ascending: false });
       if (data && data.length > 0) {
         setSemesterOptions(data);
-        setSemester(data[0].code);
+        setDefaultSemester(data[0].code);
       } else {
-        setSemesterOptions([
+        const fallbacks = [
           { code: 'summer2026', title: 'Summer 2026' },
           { code: 'spring2026', title: 'Spring 2026' },
           { code: 'fall2025', title: 'Fall 2025' }
-        ]);
+        ];
+        setSemesterOptions(fallbacks);
+        setDefaultSemester(fallbacks[0].code);
       }
     } catch (e) {
-      setSemesterOptions([
+      const fallbacks = [
         { code: 'summer2026', title: 'Summer 2026' },
         { code: 'spring2026', title: 'Spring 2026' },
         { code: 'fall2025', title: 'Fall 2025' }
-      ]);
+      ];
+      setSemesterOptions(fallbacks);
+      setDefaultSemester(fallbacks[0].code);
     }
   };
 
@@ -142,30 +166,73 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     );
   }
 
+  const addFiles = (newFiles: File[]) => {
+    setUploadItems(prev => {
+      const updated = [...prev];
+      newFiles.forEach(file => {
+        // Prevent duplicates
+        if (!updated.some(item => item.file.name === file.name && item.file.size === file.size)) {
+          updated.push({
+            file,
+            fileType: defaultFileType,
+            semester: defaultSemester,
+            progress: 0,
+            status: 'pending'
+          });
+        }
+      });
+      return updated;
+    });
+  };
+
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setIsDragging(false);
     if (e.dataTransfer.files) {
-      const selected = Array.from(e.dataTransfer.files);
-      setFiles(prev => [...prev, ...selected]);
+      addFiles(Array.from(e.dataTransfer.files));
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const selected = Array.from(e.target.files);
-      setFiles(prev => [...prev, ...selected]);
+      addFiles(Array.from(e.target.files));
     }
   };
 
   const removeFile = (idx: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== idx));
+    setUploadItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateItemSemester = (idx: number, sem: string) => {
+    setUploadItems(prev => {
+      const next = [...prev];
+      next[idx].semester = sem;
+      return next;
+    });
+  };
+
+  const updateItemFileType = (idx: number, type: string) => {
+    setUploadItems(prev => {
+      const next = [...prev];
+      next[idx].fileType = type;
+      return next;
+    });
+  };
+
+  // Bulk Apply Settings to all files
+  const applyDefaultsToAll = () => {
+    setUploadItems(prev => prev.map(item => ({
+      ...item,
+      semester: defaultSemester,
+      fileType: defaultFileType
+    })));
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (files.length === 0) {
+    if (uploadItems.length === 0) {
       setErrorMessage('Please select at least one file to upload.');
       return;
     }
@@ -175,31 +242,42 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     }
 
     setIsUploading(true);
-    setUploadProgress(15);
+    setOverallProgress(10);
 
     try {
       const cleanCourse = courseCode.trim().replace(/\s+/g, '').toUpperCase();
       const cleanFaculty = facultyInitial.trim().replace(/[^a-zA-Z]/g, '').toUpperCase();
-      let completed = 0;
+      let completedCount = 0;
 
-      for (const file of files) {
+      for (let i = 0; i < uploadItems.length; i++) {
+        const item = uploadItems[i];
+
+        // Mark item uploading
+        setUploadItems(prev => {
+          const next = [...prev];
+          next[i].status = 'uploading';
+          next[i].progress = 20;
+          return next;
+        });
+
         let driveFileId = 'fallback-local-' + Date.now();
         let driveAccountId = 'primary';
 
         try {
           const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-drive-upload-url', {
             body: {
-              fileName: file.name,
-              fileSizeBytes: file.size,
-              mimeType: file.type || 'application/octet-stream'
+              fileName: item.file.name,
+              fileSizeBytes: item.file.size,
+              mimeType: item.file.type || 'application/octet-stream'
             }
           });
 
           if (!edgeError && edgeData?.uploadUrl) {
             const driveRes = await fetch(edgeData.uploadUrl, {
               method: 'PUT',
-              body: file
+              body: item.file
             });
+
             if (driveRes.ok) {
               const resText = await driveRes.text();
               try {
@@ -216,43 +294,59 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           console.warn('Direct drive edge invocation notice:', edgeErr);
         }
 
+        // Save metadata to study_materials with individual file's semester & file_type
+        setUploadItems(prev => {
+          const next = [...prev];
+          next[i].status = 'saving';
+          next[i].progress = 80;
+          return next;
+        });
+
         const { error: dbError } = await supabase
           .from('study_materials')
           .insert({
             uploader_id: user.id,
             faculty_initial: cleanFaculty || 'GENERAL',
             course_code: cleanCourse,
-            semester: semester,
-            file_type: fileType,
+            semester: item.semester,
+            file_type: item.fileType,
             drive_account_id: driveAccountId,
             drive_file_id: driveFileId,
-            file_name: file.name,
-            file_size_bytes: file.size,
+            file_name: item.file.name,
+            file_size_bytes: item.file.size,
             status: 'approved'
           });
 
         if (dbError) throw dbError;
-        completed++;
-        setUploadProgress(Math.round((completed / files.length) * 90));
+
+        completedCount++;
+        setUploadItems(prev => {
+          const next = [...prev];
+          next[i].status = 'done';
+          next[i].progress = 100;
+          return next;
+        });
+
+        setOverallProgress(Math.round((completedCount / uploadItems.length) * 100));
       }
 
-      setUploadProgress(100);
-      setSuccessCount(completed);
+      setSuccessCount(completedCount);
       onUploadSuccess();
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'Upload failed. Please try again.');
+      setErrorMessage(err.message || 'Bulk upload failed. Please try again.');
     } finally {
       setIsUploading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full max-w-3xl bg-slate-900 border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
+          className="absolute top-5 right-5 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -264,10 +358,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </div>
 
             <h3 className="text-2xl font-black text-white mb-2">
-              Upload Successful!
+              Bulk Upload Complete!
             </h3>
             <p className="text-sm text-slate-300 max-w-md mx-auto mb-6">
-              Thank you for contributing {successCount} {successCount === 1 ? 'material' : 'materials'} to the EWUmate Vault!
+              Successfully contributed <strong className="text-emerald-400">{successCount}</strong> study materials to the EWUmate Vault!
             </p>
 
             <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-900/60 to-indigo-900/60 border border-purple-500/30 text-left mb-6 relative overflow-hidden">
@@ -296,7 +390,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <button
               onClick={() => {
                 setSuccessCount(null);
-                setFiles([]);
+                setUploadItems([]);
                 onClose();
               }}
               className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors"
@@ -306,13 +400,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           </div>
         ) : (
           <div>
+            {/* Modal Header */}
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
                 <Upload className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-white">
-                  Contribute Study Materials
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <span>Bulk Upload Study Materials</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Multi-file
+                  </span>
                 </h3>
                 <p className="text-xs text-slate-400">
                   Uploading as <span className="text-purple-400 font-semibold">{user.email}</span>
@@ -321,22 +419,98 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </div>
 
             {errorMessage && (
-              <div className="mb-4 p-3 rounded-2xl bg-rose-950/50 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
+              <div className="mb-5 p-3.5 rounded-2xl bg-rose-950/50 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            <form onSubmit={handleUploadSubmit} className="space-y-4">
+            <form onSubmit={handleUploadSubmit} className="space-y-6">
+              {/* Section 1: Course & Faculty Details */}
+              <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/60 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>1. Course & Faculty Target</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Course Code with Autocomplete */}
+                  <div className="relative">
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Course Code (e.g. CSE106, MAT101) *
+                    </label>
+                    <div className="relative">
+                      <BookOpen className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        value={courseCode}
+                        onChange={(e) => {
+                          setCourseCode(e.target.value.toUpperCase());
+                          setShowCourseSuggestions(true);
+                        }}
+                        placeholder="CSE106"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white font-mono font-bold uppercase focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                      />
+                    </div>
+
+                    {showCourseSuggestions && courseSuggestions.length > 0 && (
+                      <div className="absolute z-30 top-full mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 shadow-xl overflow-hidden">
+                        {courseSuggestions.map((c) => (
+                          <button
+                            type="button"
+                            key={c.code}
+                            onClick={() => {
+                              setCourseCode(c.code);
+                              setShowCourseSuggestions(false);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs hover:bg-slate-700 text-slate-200 flex items-center justify-between"
+                          >
+                            <span className="font-mono font-bold text-purple-300">{c.code}</span>
+                            <span className="text-slate-400 truncate ml-2 text-[11px]">{c.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Faculty Initial */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Faculty Initial (e.g. JUDDIN, TD)
+                    </label>
+                    <div className="relative">
+                      <GraduationCap className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={facultyInitial}
+                        onChange={(e) => setFacultyInitial(e.target.value.toUpperCase())}
+                        placeholder="JUDDIN"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white font-mono font-bold uppercase focus:outline-none focus:border-purple-500 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Drag & Drop File Picker */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  Select Files (PDFs, Slides, Images, Notes)
+                  2. Select or Drop Multiple Files
                 </label>
                 <div
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
                   onDrop={handleFileDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-700 hover:border-purple-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-800/40 hover:bg-slate-800/60 transition-all"
+                  className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+                    isDragging
+                      ? 'border-purple-500 bg-purple-950/20 scale-[1.01]'
+                      : 'border-slate-700 hover:border-purple-500/60 bg-slate-800/40 hover:bg-slate-800/60'
+                  }`}
                 >
                   <input
                     ref={fileInputRef}
@@ -345,152 +519,170 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     className="hidden"
                     onChange={handleFileSelect}
                   />
-                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-2 text-slate-400">
-                    <FileText className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-2 text-purple-400">
+                    <Upload className="w-5 h-5" />
                   </div>
                   <p className="text-xs font-bold text-slate-200">
-                    Click to browse or drop files here
+                    Drop multiple materials here, or <span className="text-purple-400 underline">browse files</span>
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Supported: PDF, PPTX, DOCX, PNG, JPG, ZIP (Max 250MB)
+                    Supported: PDF, PPTX, DOCX, ZIP, JPG, PNG (Max 250MB each)
                   </p>
                 </div>
-
-                {files.length > 0 && (
-                  <div className="mt-3 space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
-                    {files.map((f, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-800 text-xs text-slate-200 border border-slate-700/60"
-                      >
-                        <span className="truncate max-w-[280px]">{f.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400">
-                            {(f.size / (1024 * 1024)).toFixed(1)} MB
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeFile(i)}
-                            className="text-slate-400 hover:text-rose-400"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
-              {/* Course Code */}
-              <div className="relative">
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  Course Code (e.g. CSE106, MAT101)
-                </label>
-                <div className="relative">
-                  <BookOpen className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={courseCode}
-                    onChange={(e) => {
-                      setCourseCode(e.target.value.toUpperCase());
-                      setShowCourseSuggestions(true);
-                    }}
-                    placeholder="CSE106"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white font-mono font-bold uppercase focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
-                  />
-                </div>
+              {/* Section 3: Selected Files Configuration Table */}
+              {uploadItems.length > 0 && (
+                <div className="space-y-3">
+                  {/* Bulk Defaults Bar */}
+                  <div className="p-3.5 rounded-2xl bg-purple-950/30 border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <span className="font-bold text-purple-200 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-purple-400" />
+                      <span>{uploadItems.length} Files Selected</span>
+                    </span>
 
-                {showCourseSuggestions && courseSuggestions.length > 0 && (
-                  <div className="absolute z-20 top-full mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 shadow-xl overflow-hidden">
-                    {courseSuggestions.map((c) => (
+                    <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                      <select
+                        value={defaultSemester}
+                        onChange={(e) => setDefaultSemester(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-purple-500/30 text-xs font-medium text-slate-200"
+                      >
+                        {semesterOptions.map((s) => (
+                          <option key={s.code} value={s.code}>
+                            {s.title}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={defaultFileType}
+                        onChange={(e) => setDefaultFileType(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-purple-500/30 text-xs font-medium text-slate-200"
+                      >
+                        {KNOWN_FILE_TYPES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {getCategoryMeta(cat).label}
+                          </option>
+                        ))}
+                      </select>
+
                       <button
                         type="button"
-                        key={c.code}
-                        onClick={() => {
-                          setCourseCode(c.code);
-                          setShowCourseSuggestions(false);
-                        }}
-                        className="w-full px-3 py-2 text-left text-xs hover:bg-slate-700 text-slate-200 flex items-center justify-between"
+                        onClick={applyDefaultsToAll}
+                        className="px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-500/30 font-bold transition-all"
                       >
-                        <span className="font-mono font-bold text-purple-300">{c.code}</span>
-                        <span className="text-slate-400 truncate ml-2 text-[11px]">{c.name}</span>
+                        Apply to All
                       </button>
-                    ))}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Faculty Initial & Semester */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    Faculty Initial (e.g. JUDDIN)
-                  </label>
-                  <div className="relative">
-                    <GraduationCap className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={facultyInitial}
-                      onChange={(e) => setFacultyInitial(e.target.value.toUpperCase())}
-                      placeholder="JUDDIN"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white font-mono font-bold uppercase focus:outline-none focus:border-purple-500 transition-all"
-                    />
+                  {/* Individual File Rows */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    {uploadItems.map((item, idx) => {
+                      const categoryMeta = getCategoryMeta(item.fileType);
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+                        >
+                          {/* File info */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 truncate">
+                              <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                              <span className="font-bold text-slate-200 truncate" title={item.file.name}>
+                                {item.file.name}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono ml-6">
+                              {(item.file.size / (1024 * 1024)).toFixed(2)} MB
+                            </span>
+                          </div>
+
+                          {/* Individual Semester & FileType Controls */}
+                          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-between sm:justify-end">
+                            {/* Semester Picker for THIS file */}
+                            <select
+                              value={item.semester}
+                              disabled={isUploading}
+                              onChange={(e) => updateItemSemester(idx, e.target.value)}
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 font-medium focus:outline-none focus:border-purple-500"
+                            >
+                              {semesterOptions.map((s) => (
+                                <option key={s.code} value={s.code}>
+                                  {s.title}
+                                </option>
+                              ))}
+                            </select>
+
+                            {/* Doc Type Picker for THIS file */}
+                            <select
+                              value={item.fileType}
+                              disabled={isUploading}
+                              onChange={(e) => updateItemFileType(idx, e.target.value)}
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 font-medium focus:outline-none focus:border-purple-500"
+                            >
+                              {KNOWN_FILE_TYPES.map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {getCategoryMeta(cat).label}
+                                </option>
+                              ))}
+                            </select>
+
+                            {/* Remove button */}
+                            <button
+                              type="button"
+                              disabled={isUploading}
+                              onClick={() => removeFile(idx)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 transition-colors"
+                              title="Remove file"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Semester</label>
-                  <select
-                    value={semester}
-                    onChange={(e) => setSemester(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white focus:outline-none focus:border-purple-500 transition-all"
-                  >
-                    {semesterOptions.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Material Type Category */}
+              {/* Progress & Submit Button */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  Material Category
-                </label>
-                <select
-                  value={fileType}
-                  onChange={(e) => setFileType(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white focus:outline-none focus:border-purple-500 transition-all"
-                >
-                  {KNOWN_FILE_TYPES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {getCategoryMeta(cat).label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isUploading}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
-              >
-                {isUploading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    <span>Uploading ({uploadProgress}%)...</span>
+                {isUploading && (
+                  <div className="mb-3 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-300 font-bold">
+                      <span>Uploading files to Vault...</span>
+                      <span className="text-purple-400 font-mono">{overallProgress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full transition-all duration-300"
+                        style={{ width: `${overallProgress}%` }}
+                      />
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    <span>Submit {files.length > 0 ? `(${files.length} Files)` : ''}</span>
-                  </>
                 )}
-              </button>
+
+                <button
+                  type="submit"
+                  disabled={isUploading || uploadItems.length === 0}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUploading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                      <span>Processing Bulk Upload ({overallProgress}%)...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>
+                        Upload {uploadItems.length > 0 ? `${uploadItems.length} Materials` : 'Materials'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         )}
