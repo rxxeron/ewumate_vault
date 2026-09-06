@@ -89,23 +89,13 @@ export const App: React.FC = () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('study_materials')
-        .select(`
-          *,
-          profiles:uploader_id(full_name, department_name, program_name)
-        `)
-        .eq('status', 'approved')
+        .from('public_study_materials')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       if (data) {
-        const formatted: StudyMaterial[] = data.map((item: any) => ({
-          ...item,
-          uploader_name: item.profiles?.full_name,
-          uploader_department: item.profiles?.department_name,
-          uploader_program: item.profiles?.program_name
-        }));
-        setMaterials(formatted);
+        setMaterials(data as StudyMaterial[]);
       }
     } catch (err) {
       console.error('Error loading materials:', err);
