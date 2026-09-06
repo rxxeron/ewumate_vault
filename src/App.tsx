@@ -92,7 +92,7 @@ export const App: React.FC = () => {
         .from('study_materials')
         .select(`
           *,
-          profiles:uploader_id(full_name, department_name, program_name, program_code)
+          public_profiles:uploader_id(full_name, program_name, department_name)
         `)
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
@@ -101,9 +101,9 @@ export const App: React.FC = () => {
       if (data) {
         const formatted: StudyMaterial[] = data.map((item: any) => ({
           ...item,
-          uploader_name: item.profiles?.full_name,
-          uploader_department: item.profiles?.department_name,
-          uploader_program: item.profiles?.program_name || item.profiles?.program_code
+          uploader_name: item.public_profiles?.full_name,
+          uploader_department: item.public_profiles?.department_name,
+          uploader_program: item.public_profiles?.program_name
         }));
         setMaterials(formatted);
       }
