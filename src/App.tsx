@@ -14,12 +14,17 @@ import { AuthModal } from './components/AuthModal';
 import { UploadModal } from './components/UploadModal';
 import { UploadPage } from './components/UploadPage';
 import { EWUmateModal } from './components/EWUmateModal';
+import { MobileFilterDrawer } from './components/MobileFilterDrawer';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { 
   Sparkles, 
   FolderSearch, 
   ChevronLeft,
   ChevronRight,
-  Smartphone
+  Smartphone,
+  SlidersHorizontal,
+  X as XIcon,
+  Search as SearchIcon
 } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 24;
@@ -48,6 +53,7 @@ export const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isAppModalOpen, setIsAppModalOpen] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   // Semesters list
   const [semesterMeta, setSemesterMeta] = useState<{ code: string; title: string }[]>([]);
@@ -88,6 +94,7 @@ export const App: React.FC = () => {
           *,
           profiles:uploader_id(full_name, student_id, department_name, program_name, program_code)
         `)
+        .eq('status', 'approved')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -253,23 +260,59 @@ export const App: React.FC = () => {
     setCurrentPage(1);
   };
 
-  const handleOpenContributorFromCard = (uploaderId: string, name: string) => {
-    const matched = contributors.find((c) => c.uploader_id === uploaderId);
-    if (matched) {
-      setSelectedContributor(matched);
-    } else {
-      const sample = materials.find((m) => m.uploader_id === uploaderId);
-      const count = materials.filter((m) => m.uploader_id === uploaderId).length;
-      setSelectedContributor({
-        uploader_id: uploaderId,
-        name: name || sample?.uploader_name || 'EWU Student',
-        student_id: '',
-        department: sample?.uploader_department,
-        program: sample?.uploader_program,
-        upload_count: count,
-        badge: count >= 15 ? 'Pioneer' : count >= 8 ? 'Master Contributor' : 'Scholar'
-      });
+  const handleOpenContributorFromCard = async (uploaderId: string, fallbackName?: string) => {
+    // 1. Calculate count & rank across all vault materials
+    const userMaterials = materials.filter((m) => m.uploader_id === uploaderId);
+    const count = userMaterials.length;
+
+    // Calculate all-time rank among uploaders
+    const uploaderCounts = new Map<string, number>();
+    materials.forEach((m) => {
+      if (m.uploader_id) {
+        uploaderCounts.set(m.uploader_id, (uploaderCounts.get(m.uploader_id) || 0) + 1);
+      }
+    });
+    const sortedUploaders = Array.from(uploaderCounts.entries()).sort((a, b) => b[1] - a[1]);
+    const rankIndex = sortedUploaders.findIndex(([id]) => id === uploaderId);
+    const rank = rankIndex !== -1 ? rankIndex + 1 : (count > 0 ? 1 : null);
+
+    let badge: Contributor['badge'] = 'Scholar';
+    if (count >= 15) badge = 'Pioneer';
+    else if (count >= 8) badge = 'Master Contributor';
+    else if (count >= 3) badge = 'Rising Star';
+
+    // 2. Fetch full student profile from database
+    let profileData: any = null;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, student_id, department_name, program_name, photo_url')
+        .eq('id', uploaderId)
+        .maybeSingle();
+      profileData = data;
+    } catch (e) {
+      console.warn('Could not fetch profile directly:', e);
     }
+
+    const sample = userMaterials[0];
+    const resolvedName = 
+      profileData?.full_name || 
+      fallbackName || 
+      sample?.uploader_name || 
+      (user?.id === uploaderId ? (user.user_metadata?.full_name || user.user_metadata?.fullName || user.email?.split('@')[0]) : null) ||
+      'EWU Student';
+
+    setSelectedContributor({
+      uploader_id: uploaderId,
+      name: resolvedName,
+      student_id: profileData?.student_id || sample?.uploader_student_id || '',
+      department: profileData?.department_name || sample?.uploader_department,
+      program: profileData?.program_name || sample?.uploader_program,
+      photo_url: profileData?.photo_url,
+      upload_count: count,
+      rank,
+      badge
+    });
   };
 
   return (
@@ -320,7 +363,7 @@ export const App: React.FC = () => {
         /* Archive Explorer View */
         <>
           {/* Hero Header Section */}
-          <section className="relative pt-10 pb-8 px-4 sm:px-6 max-w-7xl mx-auto w-full overflow-hidden">
+          <section className="relative pt-6 sm:pt-10 pb-5 sm:pb-8 px-4 sm:px-6 max-w-7xl mx-auto w-full overflow-hidden">
             <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute top-10 right-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -330,7 +373,7 @@ export const App: React.FC = () => {
                 <span>Open Study Archive For East West University</span>
               </div>
 
-              <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight sm:leading-snug">
+              <h1 className="text-2xl sm:text-5xl font-black tracking-tight text-white leading-tight sm:leading-snug">
                 Access East West University{' '}
                 <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent">
                   Past Questions & Slides
@@ -372,28 +415,147 @@ export const App: React.FC = () => {
           </section>
 
           {/* Main Explorer Layout */}
-          <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-16">
+          <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-24 sm:pb-16">
             <div className="flex flex-col lg:flex-row gap-8 items-start">
-              {/* Sidebar Filter Panel */}
-              <FilterSidebar
-                selectedCourse={selectedCourse}
-                onSelectCourse={setSelectedCourse}
-                selectedSemester={selectedSemester}
-                onSelectSemester={setSelectedSemester}
-                selectedFaculty={selectedFaculty}
-                onSelectFaculty={setSelectedFaculty}
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-                onResetFilters={handleResetFilters}
-                availableCourses={availableCourses}
-                availableSemesters={availableSemesters}
-                availableFaculties={availableFaculties}
-                availableCategories={availableCategories}
-                totalCount={materials.length}
-              />
+              {/* Desktop Sidebar Filter Panel */}
+              <div className="hidden lg:block w-72 shrink-0">
+                <FilterSidebar
+                  selectedCourse={selectedCourse}
+                  onSelectCourse={setSelectedCourse}
+                  selectedSemester={selectedSemester}
+                  onSelectSemester={setSelectedSemester}
+                  selectedFaculty={selectedFaculty}
+                  onSelectFaculty={setSelectedFaculty}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                  onResetFilters={handleResetFilters}
+                  availableCourses={availableCourses}
+                  availableSemesters={availableSemesters}
+                  availableFaculties={availableFaculties}
+                  availableCategories={availableCategories}
+                  totalCount={materials.length}
+                />
+              </div>
 
               {/* Material Grid / Results */}
-              <div className="flex-1 w-full">
+              <div className="flex-1 w-full min-w-0">
+                {/* Mobile Filter & Search Bar */}
+                <div className="lg:hidden mb-5 space-y-3">
+                  {/* Search Bar & Filter Button */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search materials, codes (CSE106)..."
+                        className="w-full h-11 pl-10 pr-4 rounded-2xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 shadow-sm"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                        >
+                          <XIcon className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setIsMobileFilterOpen(true)}
+                      className={`h-11 px-3.5 rounded-2xl border flex items-center gap-2 text-xs font-bold transition-all shrink-0 active:scale-95 ${
+                        (selectedCategory !== 'all' || selectedCourse !== 'all' || selectedSemester !== 'all' || selectedFaculty !== 'all')
+                          ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30'
+                          : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800'
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+                      <span>Filters</span>
+                      {(selectedCategory !== 'all' || selectedCourse !== 'all' || selectedSemester !== 'all' || selectedFaculty !== 'all') && (
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Horizontal Scrollable Quick Category Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                        selectedCategory === 'all'
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                          : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800/80'
+                      }`}
+                    >
+                      All
+                    </button>
+
+                    {availableCategories.slice(0, 8).map(({ type, count }) => {
+                      const meta = getCategoryMeta(type);
+                      const isSelected = selectedCategory === type;
+                      return (
+                        <button
+                          key={type}
+                          onClick={() => setSelectedCategory(type)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 font-bold'
+                              : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800/80'
+                          }`}
+                        >
+                          <span>{meta.label}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active Filter Chips */}
+                  {(selectedCourse !== 'all' || selectedFaculty !== 'all' || selectedSemester !== 'all' || selectedCategory !== 'all') && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[11px] text-slate-500 font-semibold">Active:</span>
+                      {selectedCourse !== 'all' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-xs font-mono font-bold">
+                          {selectedCourse}
+                          <button onClick={() => setSelectedCourse('all')} className="hover:text-white">
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                      {selectedSemester !== 'all' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
+                          {selectedSemester}
+                          <button onClick={() => setSelectedSemester('all')} className="hover:text-white">
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                      {selectedFaculty !== 'all' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-bold">
+                          {selectedFaculty}
+                          <button onClick={() => setSelectedFaculty('all')} className="hover:text-white">
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                      {selectedCategory !== 'all' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/30 text-xs font-bold">
+                          {getCategoryMeta(selectedCategory).label}
+                          <button onClick={() => setSelectedCategory('all')} className="hover:text-white">
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                      <button
+                        onClick={handleResetFilters}
+                        className="text-[11px] text-purple-400 hover:text-purple-300 underline ml-1 font-semibold"
+                      >
+                        Reset all
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
                   <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold flex-wrap">
                     <span>
@@ -419,16 +581,7 @@ export const App: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Mobile Search input */}
-                  <div className="w-full sm:w-auto md:hidden">
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search files..."
-                      className="w-full px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white"
-                    />
-                  </div>
+
                 </div>
 
                 {/* Grid */}
@@ -586,13 +739,16 @@ export const App: React.FC = () => {
         onClose={() => setPreviewMaterial(null)}
       />
 
-      <ContributorProfileModal
-        contributor={selectedContributor}
-        allContributors={contributors}
-        materials={materials}
-        onClose={() => setSelectedContributor(null)}
-        onPreview={setPreviewMaterial}
-      />
+      {selectedContributor && (
+        <ContributorProfileModal
+          contributor={selectedContributor}
+          allContributors={contributors}
+          materials={materials}
+          onClose={() => setSelectedContributor(null)}
+          onPreview={setPreviewMaterial}
+          onOpenUpload={() => setCurrentView('upload')}
+        />
+      )}
 
       <AuthModal
         isOpen={isAuthOpen}
@@ -615,6 +771,39 @@ export const App: React.FC = () => {
       <EWUmateModal
         isOpen={isAppModalOpen}
         onClose={() => setIsAppModalOpen(false)}
+      />
+
+      {/* Mobile Filter Sheet Drawer */}
+      <MobileFilterDrawer
+        isOpen={isMobileFilterOpen}
+        onClose={() => setIsMobileFilterOpen(false)}
+        selectedCourse={selectedCourse}
+        onSelectCourse={setSelectedCourse}
+        selectedSemester={selectedSemester}
+        onSelectSemester={setSelectedSemester}
+        selectedFaculty={selectedFaculty}
+        onSelectFaculty={setSelectedFaculty}
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
+        onResetFilters={handleResetFilters}
+        availableCourses={availableCourses}
+        availableSemesters={availableSemesters}
+        availableFaculties={availableFaculties}
+        availableCategories={availableCategories}
+        totalCount={materials.length}
+      />
+
+      {/* Mobile Native-Style Bottom Navigation Bar */}
+      <MobileBottomNav
+        currentView={currentView}
+        onNavigate={setCurrentView}
+        user={user}
+        onOpenMyProfile={() => {
+          if (user) {
+            handleOpenContributorFromCard(user.id, user.user_metadata?.full_name || user.email?.split('@')[0] || 'My Profile');
+          }
+        }}
+        onOpenAuth={() => setIsAuthOpen(true)}
       />
     </div>
   );

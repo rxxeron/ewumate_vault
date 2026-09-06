@@ -72,10 +72,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg(null);
     setGoogleLoading(true);
     try {
-      const isProd = window.location.hostname === 'vault.ewumate.pro.bd';
-      const redirectTo = isProd 
-        ? 'https://vault.ewumate.pro.bd/' 
-        : `${window.location.origin}/`;
+      const redirectTo = `${window.location.origin}/`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

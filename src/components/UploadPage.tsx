@@ -580,7 +580,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-28 sm:py-8 animate-fade-in">
       {/* Top Header Navigation */}
       <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
         <button

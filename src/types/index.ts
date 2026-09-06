@@ -30,6 +30,8 @@ export interface Contributor {
   program?: string;
   upload_count: number;
   avatar_url?: string;
+  photo_url?: string;
+  rank?: number | null;
   badge: 'Pioneer' | 'Master Contributor' | 'Scholar' | 'Rising Star';
 }
 
