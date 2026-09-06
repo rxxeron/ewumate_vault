@@ -88,15 +88,32 @@ export const App: React.FC = () => {
   const fetchMaterials = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('public_study_materials')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let allData: any[] = [];
+      let from = 0;
+      const step = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
-      if (data) {
-        setMaterials(data as StudyMaterial[]);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('public_study_materials')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + step - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          if (data.length < step) {
+            hasMore = false;
+          } else {
+            from += step;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+
+      setMaterials(allData as StudyMaterial[]);
     } catch (err) {
       console.error('Error loading materials:', err);
     } finally {
