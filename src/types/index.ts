@@ -25,7 +25,7 @@ export interface StudyMaterial {
 export interface Contributor {
   uploader_id: string;
   name: string;
-  student_id: string;
+  student_id?: string;
   department?: string;
   program?: string;
   upload_count: number;

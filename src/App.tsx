@@ -92,7 +92,7 @@ export const App: React.FC = () => {
         .from('study_materials')
         .select(`
           *,
-          profiles:uploader_id(full_name, student_id, department_name, program_name, program_code)
+          profiles:uploader_id(full_name, department_name, program_name, program_code)
         `)
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
@@ -102,7 +102,6 @@ export const App: React.FC = () => {
         const formatted: StudyMaterial[] = data.map((item: any) => ({
           ...item,
           uploader_name: item.profiles?.full_name,
-          uploader_student_id: item.profiles?.student_id,
           uploader_department: item.profiles?.department_name,
           uploader_program: item.profiles?.program_name || item.profiles?.program_code
         }));
@@ -121,7 +120,7 @@ export const App: React.FC = () => {
     const semesterMap = new Map<string, number>();
     const facultyMap = new Map<string, number>();
     const catMap = new Map<string, number>();
-    const uploaderMap = new Map<string, { name: string; student_id: string; department?: string; program?: string; count: number }>();
+    const uploaderMap = new Map<string, { name: string; department?: string; program?: string; count: number }>();
 
     materials.forEach((m) => {
       // Course
@@ -150,7 +149,6 @@ export const App: React.FC = () => {
         } else {
           uploaderMap.set(m.uploader_id, {
             name: m.uploader_name || 'Anonymous Student',
-            student_id: m.uploader_student_id || '',
             department: m.uploader_department,
             program: m.uploader_program,
             count: 1
@@ -182,13 +180,12 @@ export const App: React.FC = () => {
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count);
 
-    // Filter out Admin (Md. Rakibul Hasan / 2025-2-50-00 / bd73b4d7-d922-458f-a52c-40e30e148bf4)
+    // Filter out Admin (Md. Rakibul Hasan / bd73b4d7-d922-458f-a52c-40e30e148bf4)
     const contribs: Contributor[] = Array.from(uploaderMap.entries())
       .filter(([uploader_id, data]) => {
         const lowerName = data.name.toLowerCase();
         const isAdmin = 
           uploader_id === 'bd73b4d7-d922-458f-a52c-40e30e148bf4' ||
-          data.student_id === '2025-2-50-00' ||
           lowerName.includes('rakibul hasan') ||
           lowerName.includes('rxxeron');
         return !isAdmin;
@@ -202,7 +199,6 @@ export const App: React.FC = () => {
         return {
           uploader_id,
           name: data.name,
-          student_id: data.student_id,
           department: data.department,
           program: data.program,
           upload_count: data.count,
@@ -285,8 +281,8 @@ export const App: React.FC = () => {
     let profileData: any = null;
     try {
       const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, student_id, department_name, program_name, photo_url')
+        .from('public_profiles')
+        .select('id, full_name, department_name, program_name, photo_url')
         .eq('id', uploaderId)
         .maybeSingle();
       profileData = data;
@@ -305,7 +301,6 @@ export const App: React.FC = () => {
     setSelectedContributor({
       uploader_id: uploaderId,
       name: resolvedName,
-      student_id: profileData?.student_id || sample?.uploader_student_id || '',
       department: profileData?.department_name || sample?.uploader_department,
       program: profileData?.program_name || sample?.uploader_program,
       photo_url: profileData?.photo_url,
