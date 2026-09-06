@@ -13,8 +13,9 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface NavbarProps {
   user: SupabaseUser | null;
-  currentView: 'archive' | 'contributors';
-  onNavigate: (view: 'archive' | 'contributors') => void;
+  currentView: 'archive' | 'contributors' | 'upload';
+  onNavigate: (view: 'archive' | 'contributors' | 'upload') => void;
+  onOpenMyProfile: () => void;
   onOpenUpload: () => void;
   onOpenAuth: () => void;
   onOpenAppModal: () => void;
@@ -28,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   user,
   currentView,
   onNavigate,
+  onOpenMyProfile,
   onOpenUpload,
   onOpenAuth,
   onOpenAppModal,
@@ -86,6 +88,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Award className="w-3.5 h-3.5 text-amber-400" />
               <span>Contributors</span>
             </button>
+
+            <button
+              onClick={() => onNavigate('upload')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                currentView === 'upload'
+                  ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Upload className="w-3.5 h-3.5 text-purple-400" />
+              <span>Upload Materials</span>
+            </button>
           </nav>
         </div>
 
@@ -118,8 +132,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Upload Button */}
           <button
-            onClick={onOpenUpload}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-purple-600/25 active:scale-95 transition-all"
+            onClick={() => onNavigate('upload')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95 ${
+              currentView === 'upload'
+                ? 'bg-purple-600 text-white ring-2 ring-purple-400/50 shadow-purple-600/40'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-600/25'
+            }`}
           >
             <Upload className="w-4 h-4" />
             <span>Upload</span>
@@ -128,13 +146,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Auth State Button */}
           {user ? (
             <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-              <div 
-                className="flex items-center gap-1.5 text-xs text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-xl max-w-[150px] truncate"
-                title={user.email}
+              <button
+                onClick={onOpenMyProfile}
+                className="flex items-center gap-1.5 text-xs text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 px-3 py-1.5 rounded-xl max-w-[160px] truncate transition-all active:scale-95 shadow-sm"
+                title="Click to view your contributor profile & semester breakdown"
               >
                 <User className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                 <span className="truncate font-semibold">{user.email?.split('@')[0]}</span>
-              </div>
+              </button>
               <button
                 onClick={onSignOut}
                 className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl transition-colors"

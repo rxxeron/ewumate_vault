@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { KNOWN_FILE_TYPES, getCategoryMeta } from '../types';
+import { FILE_TYPES, getCategoryMeta } from '../types';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   // Global Default Form Settings
   const [defaultSemester, setDefaultSemester] = useState('summer2026');
-  const [defaultFileType, setDefaultFileType] = useState('Mid Questions');
+  const [defaultFileType, setDefaultFileType] = useState('Mid Question');
   const [courseCode, setCourseCode] = useState('');
   const [facultyInitial, setFacultyInitial] = useState('');
 
@@ -559,9 +559,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         onChange={(e) => setDefaultFileType(e.target.value)}
                         className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-purple-500/30 text-xs font-medium text-slate-200"
                       >
-                        {KNOWN_FILE_TYPES.map((cat) => (
+                        {FILE_TYPES.map((cat: string) => (
                           <option key={cat} value={cat}>
-                            {getCategoryMeta(cat).label}
+                            {cat}
                           </option>
                         ))}
                       </select>
@@ -579,7 +579,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   {/* Individual File Rows */}
                   <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
                     {uploadItems.map((item, idx) => {
-                      const categoryMeta = getCategoryMeta(item.fileType);
+                      
                       return (
                         <div
                           key={idx}
@@ -621,9 +621,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                               onChange={(e) => updateItemFileType(idx, e.target.value)}
                               className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 font-medium focus:outline-none focus:border-purple-500"
                             >
-                              {KNOWN_FILE_TYPES.map((cat) => (
+                              {FILE_TYPES.map((cat: string) => (
                                 <option key={cat} value={cat}>
-                                  {getCategoryMeta(cat).label}
+                                  {cat}
                                 </option>
                               ))}
                             </select>

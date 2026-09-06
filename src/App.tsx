@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { StudyMaterial, Contributor } from './types';
-import { getCategoryMeta } from './types';
+import { getCategoryMeta, normalizeFileType } from './types';
 import { Navbar } from './components/Navbar';
 import { PromoBanner } from './components/PromoBanner';
 import { FilterSidebar } from './components/FilterSidebar';
@@ -12,6 +12,7 @@ import { ContributorProfileModal } from './components/ContributorProfileModal';
 import { ContributorsPage } from './components/ContributorsPage';
 import { AuthModal } from './components/AuthModal';
 import { UploadModal } from './components/UploadModal';
+import { UploadPage } from './components/UploadPage';
 import { EWUmateModal } from './components/EWUmateModal';
 import { 
   Sparkles, 
@@ -29,7 +30,7 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Active page view: 'archive' or 'contributors'
-  const [currentView, setCurrentView] = useState<'archive' | 'contributors'>('archive');
+  const [currentView, setCurrentView] = useState<'archive' | 'contributors' | 'upload'>('archive');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,7 +131,8 @@ export const App: React.FC = () => {
       }
       // Category / File Type
       if (m.file_type) {
-        catMap.set(m.file_type, (catMap.get(m.file_type) || 0) + 1);
+        const norm = normalizeFileType(m.file_type);
+        catMap.set(norm, (catMap.get(norm) || 0) + 1);
       }
 
       // Uploader
@@ -224,7 +226,7 @@ export const App: React.FC = () => {
       if (selectedCourse !== 'all' && m.course_code !== selectedCourse) return false;
       if (selectedSemester !== 'all' && m.semester !== selectedSemester) return false;
       if (selectedFaculty !== 'all' && m.faculty_initial !== selectedFaculty) return false;
-      if (selectedCategory !== 'all' && m.file_type !== selectedCategory) return false;
+      if (selectedCategory !== 'all' && normalizeFileType(m.file_type) !== selectedCategory) return false;
 
       return true;
     });
@@ -280,6 +282,11 @@ export const App: React.FC = () => {
         user={user}
         currentView={currentView}
         onNavigate={setCurrentView}
+        onOpenMyProfile={() => {
+          if (user) {
+            handleOpenContributorFromCard(user.id, user.user_metadata?.full_name || user.email?.split('@')[0] || 'My Profile');
+          }
+        }}
         onOpenUpload={() => setIsUploadOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenAppModal={() => setIsAppModalOpen(true)}
@@ -293,12 +300,21 @@ export const App: React.FC = () => {
       />
 
       {/* 3. Conditional Page View */}
-      {currentView === 'contributors' ? (
+      {currentView === 'upload' ? (
+        <UploadPage
+          user={user}
+          onNavigateBack={() => setCurrentView('archive')}
+          onRequireAuth={() => setIsAuthOpen(true)}
+          onUploadSuccess={() => {
+            fetchMaterials();
+          }}
+        />
+      ) : currentView === 'contributors' ? (
         <ContributorsPage
           contributors={contributors}
           onBack={() => setCurrentView('archive')}
           onSelectContributor={(c) => setSelectedContributor(c)}
-          onOpenUpload={() => setIsUploadOpen(true)}
+          onOpenUpload={() => setCurrentView('upload')}
         />
       ) : (
         /* Archive Explorer View */
@@ -417,14 +433,14 @@ export const App: React.FC = () => {
 
                 {/* Grid */}
                 {isLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {[1, 2, 3, 4, 5, 6].map((n) => (
                       <div key={n} className="h-48 rounded-3xl bg-slate-900/40 border border-slate-800 animate-pulse" />
                     ))}
                   </div>
                 ) : paginatedMaterials.length > 0 ? (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {paginatedMaterials.map((item) => (
                         <MaterialCard
                           key={item.id}
@@ -572,6 +588,7 @@ export const App: React.FC = () => {
 
       <ContributorProfileModal
         contributor={selectedContributor}
+        allContributors={contributors}
         materials={materials}
         onClose={() => setSelectedContributor(null)}
         onPreview={setPreviewMaterial}
