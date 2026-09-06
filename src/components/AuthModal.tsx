@@ -37,12 +37,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Strict East West University student mail verification
-  // Format: 2022-1-60-001@std.ewubd.edu or any valid EWU student email
-  const validateEwuStudentEmail = (emailStr: string): boolean => {
+  // Validate student email or authorized administrator account
+  const validateAllowedEmail = (emailStr: string): boolean => {
     const trimmed = emailStr.trim().toLowerCase();
-    return /^[0-9]{4}-[1-3]-[0-9]{2}-[0-9]{3}@std\.ewubd\.edu$/.test(trimmed) || 
-           trimmed.endsWith('@std.ewubd.edu');
+    
+    // 1. Allow institutional student emails
+    if (
+      /^[0-9]{4}-[1-3]-[0-9]{2}-[0-9]{3}@std\.ewubd\.edu$/.test(trimmed) || 
+      trimmed.endsWith('@std.ewubd.edu') ||
+      trimmed.endsWith('@ewubd.edu')
+    ) {
+      return true;
+    }
+
+    // 2. Allow administrative / owner accounts
+    const adminEmails = [
+      'rhrakibulhasan279@gmail.com',
+      'rakibulhasan@ewubd.edu',
+      'rxxeron@gmail.com'
+    ];
+    if (adminEmails.includes(trimmed)) {
+      return true;
+    }
+
+    return false;
   };
 
   const extractStudentId = (emailStr: string): string => {
@@ -83,9 +101,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. Strict verification
-    if (!validateEwuStudentEmail(cleanEmail)) {
-      setErrorMsg('Access Restricted: Only East West University student emails (e.g. 2022-1-60-123@std.ewubd.edu) are permitted to upload.');
+    // 1. Check if allowed
+    if (!validateAllowedEmail(cleanEmail)) {
+      setErrorMsg('Access Restricted: Please sign in with your East West University student email (e.g. 2022-1-60-123@std.ewubd.edu).');
       return;
     }
 
@@ -106,7 +124,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         });
 
         if (error) {
-          // If already exists, attempt automatic sign-in
           if (error.message.toLowerCase().includes('already registered')) {
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: cleanEmail,
@@ -127,7 +144,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onSuccess(data.user);
             onClose();
           } else {
-            setSuccessMsg('Account created! If email confirmation is required, please check your @std.ewubd.edu inbox.');
+            setSuccessMsg('Account created! If email confirmation is required, please check your inbox.');
           }
         }
       } else {
@@ -182,7 +199,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {isSignUp ? 'Join Vault as a Contributor' : 'Sign In to Upload'}
           </h2>
           <p className="text-xs text-purple-300 font-medium mt-1">
-            East West University Student Portal
+            East West University Portal
           </p>
         </div>
 
@@ -192,7 +209,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div>
             <span className="font-bold text-white">EWU Institutional Sign In:</span>
             <p className="mt-0.5 text-purple-300">
-              Sign in using your Google institutional student account or your <strong className="text-white font-mono">@std.ewubd.edu</strong> password.
+              Sign in with Google or your university account (<strong className="text-white font-mono">@std.ewubd.edu</strong>).
             </p>
           </div>
         </div>
@@ -275,7 +292,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1.5">
-              EWU Student Email (@std.ewubd.edu)
+              Email Address
             </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -284,7 +301,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="2022-1-60-xxx@std.ewubd.edu"
+                placeholder="xxxx-x-xx-xxx@std.ewubd.edu"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono transition-all"
               />
             </div>
@@ -315,7 +332,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             ) : (
               <>
-                <span>{isSignUp ? 'Create Contributor Account' : 'Sign In'}</span>
+                <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
