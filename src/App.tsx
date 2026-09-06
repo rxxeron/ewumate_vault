@@ -9,6 +9,7 @@ import { FilterSidebar } from './components/FilterSidebar';
 import { MaterialCard } from './components/MaterialCard';
 import { FilePreviewModal } from './components/FilePreviewModal';
 import { ContributorLeaderboard } from './components/ContributorLeaderboard';
+import { ContributorProfileModal } from './components/ContributorProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { UploadModal } from './components/UploadModal';
 import { EWUmateModal } from './components/EWUmateModal';
@@ -40,6 +41,7 @@ export const App: React.FC = () => {
   // Modals
   const [previewMaterial, setPreviewMaterial] = useState<StudyMaterial | null>(null);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [selectedContributor, setSelectedContributor] = useState<Contributor | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isAppModalOpen, setIsAppModalOpen] = useState(false);
@@ -85,7 +87,7 @@ export const App: React.FC = () => {
         .from('study_materials')
         .select(`
           *,
-          profiles:uploader_id(full_name, student_id)
+          profiles:uploader_id(full_name, student_id, department_name, program_name, program_code)
         `)
         .order('created_at', { ascending: false });
 
@@ -94,7 +96,9 @@ export const App: React.FC = () => {
         const formatted: StudyMaterial[] = data.map((item: any) => ({
           ...item,
           uploader_name: item.profiles?.full_name,
-          uploader_student_id: item.profiles?.student_id
+          uploader_student_id: item.profiles?.student_id,
+          uploader_department: item.profiles?.department_name,
+          uploader_program: item.profiles?.program_name || item.profiles?.program_code
         }));
         setMaterials(formatted);
       }
@@ -111,7 +115,7 @@ export const App: React.FC = () => {
     const semesterMap = new Map<string, number>();
     const facultyMap = new Map<string, number>();
     const catMap: Record<string, number> = {};
-    const uploaderMap = new Map<string, { name: string; student_id: string; count: number }>();
+    const uploaderMap = new Map<string, { name: string; student_id: string; department?: string; program?: string; count: number }>();
 
     materials.forEach((m) => {
       // Course
@@ -138,6 +142,8 @@ export const App: React.FC = () => {
           uploaderMap.set(m.uploader_id, {
             name: m.uploader_name || 'Anonymous Student',
             student_id: m.uploader_student_id || '',
+            department: m.uploader_department,
+            program: m.uploader_program,
             count: 1
           });
         }
@@ -163,7 +169,17 @@ export const App: React.FC = () => {
       .map(([initial, count]) => ({ initial, count }))
       .sort((a, b) => b.count - a.count);
 
+    // Filter out Admin (Md. Rakibul Hasan / 2025-2-50-00 / bd73b4d7-d922-458f-a52c-40e30e148bf4) from the public Hall of Fame leaderboard
     const contribs: Contributor[] = Array.from(uploaderMap.entries())
+      .filter(([uploader_id, data]) => {
+        const lowerName = data.name.toLowerCase();
+        const isAdmin = 
+          uploader_id === 'bd73b4d7-d922-458f-a52c-40e30e148bf4' ||
+          data.student_id === '2025-2-50-00' ||
+          lowerName.includes('rakibul hasan') ||
+          lowerName.includes('rxxeron');
+        return !isAdmin;
+      })
       .map(([uploader_id, data]) => {
         let badge: Contributor['badge'] = 'Scholar';
         if (data.count >= 15) badge = 'Pioneer';
@@ -174,6 +190,8 @@ export const App: React.FC = () => {
           uploader_id,
           name: data.name,
           student_id: data.student_id,
+          department: data.department,
+          program: data.program,
           upload_count: data.count,
           badge
         };
@@ -223,6 +241,26 @@ export const App: React.FC = () => {
     setSelectedSemester('all');
     setSelectedFaculty('all');
     setSelectedCategory('all');
+  };
+
+  const handleOpenContributorFromCard = (uploaderId: string, name: string) => {
+    // Find contributor or construct from materials
+    const matched = contributors.find((c) => c.uploader_id === uploaderId);
+    if (matched) {
+      setSelectedContributor(matched);
+    } else {
+      const sample = materials.find((m) => m.uploader_id === uploaderId);
+      const count = materials.filter((m) => m.uploader_id === uploaderId).length;
+      setSelectedContributor({
+        uploader_id: uploaderId,
+        name: name || sample?.uploader_name || 'EWU Student',
+        student_id: '',
+        department: sample?.uploader_department,
+        program: sample?.uploader_program,
+        upload_count: count,
+        badge: count >= 15 ? 'Pioneer' : count >= 8 ? 'Master Contributor' : 'Scholar'
+      });
+    }
   };
 
   return (
@@ -283,10 +321,14 @@ export const App: React.FC = () => {
                 Courses
               </div>
             </div>
-            <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+            <div 
+              onClick={() => setIsLeaderboardOpen(true)}
+              className="p-3 sm:p-4 rounded-2xl bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition-all"
+              title="Click to view Hall of Fame"
+            >
               <div className="text-xl sm:text-2xl font-black text-cyan-400">{contributors.length}</div>
               <div className="text-[11px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                Contributors
+                Top Contributors
               </div>
             </div>
           </div>
@@ -365,6 +407,7 @@ export const App: React.FC = () => {
                     onPreview={setPreviewMaterial}
                     onSelectCourse={setSelectedCourse}
                     onSelectFaculty={setSelectedFaculty}
+                    onOpenContributor={handleOpenContributorFromCard}
                   />
                 ))}
               </div>
@@ -436,8 +479,18 @@ export const App: React.FC = () => {
         isOpen={isLeaderboardOpen}
         onClose={() => setIsLeaderboardOpen(false)}
         contributors={contributors}
+        onSelectContributor={(c) => {
+          setIsLeaderboardOpen(false);
+          setSelectedContributor(c);
+        }}
         onOpenUpload={() => setIsUploadOpen(true)}
-        onOpenAppModal={() => setIsAppModalOpen(true)}
+      />
+
+      <ContributorProfileModal
+        contributor={selectedContributor}
+        materials={materials}
+        onClose={() => setSelectedContributor(null)}
+        onPreview={setPreviewMaterial}
       />
 
       <AuthModal

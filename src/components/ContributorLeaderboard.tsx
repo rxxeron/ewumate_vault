@@ -1,14 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   X, 
   Award, 
   Trophy, 
-  Medal, 
   UploadCloud, 
-  User, 
-  ExternalLink,
-  Sparkles,
-  Smartphone
+  GraduationCap, 
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import type { Contributor } from '../types';
 
@@ -16,16 +14,16 @@ interface ContributorLeaderboardProps {
   isOpen: boolean;
   onClose: () => void;
   contributors: Contributor[];
+  onSelectContributor: (contributor: Contributor) => void;
   onOpenUpload: () => void;
-  onOpenAppModal: () => void;
 }
 
 export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
   isOpen,
   onClose,
   contributors,
-  onOpenUpload,
-  onOpenAppModal
+  onSelectContributor,
+  onOpenUpload
 }) => {
   if (!isOpen) return null;
 
@@ -49,7 +47,7 @@ export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Celebrating East West University students empowering their peers with study resources.
+                Click any student contributor to view everything they have shared!
               </p>
             </div>
           </div>
@@ -65,12 +63,11 @@ export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1">
           {contributors.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">
-              No contributors recorded yet. Be the first student to upload!
+              No student contributors recorded yet. Be the first to upload!
             </div>
           ) : (
             contributors.map((c, index) => {
               const rank = index + 1;
-              const isTop3 = rank <= 3;
               const rankBadgeColor = 
                 rank === 1 ? 'bg-amber-500 text-black font-black' :
                 rank === 2 ? 'bg-slate-300 text-slate-950 font-black' :
@@ -80,7 +77,8 @@ export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
               return (
                 <div
                   key={c.uploader_id}
-                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800/80 border border-slate-700/60 transition-all"
+                  onClick={() => onSelectContributor(c)}
+                  className="group flex items-center justify-between p-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800/90 border border-slate-700/60 hover:border-purple-500/40 transition-all cursor-pointer shadow-sm"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 shadow-sm ${rankBadgeColor}`}>
@@ -89,19 +87,32 @@ export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
 
                     <div className="truncate">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm text-slate-100 truncate">{c.name}</h4>
+                        <h4 className="font-bold text-sm text-slate-100 group-hover:text-purple-300 transition-colors truncate">
+                          {c.name}
+                        </h4>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
                           {c.badge}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">
-                        {c.student_id ? `ID: ${c.student_id}` : 'EWU Student'}
-                      </p>
+
+                      {/* Display Department or Program instead of Student ID */}
+                      <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5 font-medium truncate">
+                        {c.department ? (
+                          <span className="flex items-center gap-1 truncate text-cyan-300/90">
+                            <GraduationCap className="w-3 h-3 text-cyan-400 shrink-0" />
+                            <span className="truncate">{c.department}</span>
+                          </span>
+                        ) : c.program ? (
+                          <span className="text-indigo-300 font-mono">Program: {c.program}</span>
+                        ) : (
+                          <span className="text-slate-500">EWU Student</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 ml-3 text-right">
-                    <div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <div className="text-right">
                       <div className="text-sm font-black text-amber-400">
                         {c.upload_count}
                       </div>
@@ -109,6 +120,7 @@ export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
                         {c.upload_count === 1 ? 'Upload' : 'Uploads'}
                       </div>
                     </div>
+                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-purple-400 group-hover:translate-x-0.5 transition-all" />
                   </div>
                 </div>
               );
@@ -119,7 +131,7 @@ export const ContributorLeaderboard: React.FC<ContributorLeaderboardProps> = ({
         {/* Footer CTA */}
         <div className="mt-6 pt-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-slate-400 text-center sm:text-left">
-            Have past questions or notes? Upload to earn badges & help batchmates!
+            Have past questions or notes? Upload to earn badges & help your batch!
           </p>
           <button
             onClick={() => {

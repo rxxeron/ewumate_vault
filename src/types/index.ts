@@ -14,6 +14,8 @@ export interface StudyMaterial {
   uploader_id?: string;
   uploader_name?: string;
   uploader_student_id?: string;
+  uploader_department?: string;
+  uploader_program?: string;
   faculty_initial: string;
   course_code: string;
   course_title?: string;
@@ -33,6 +35,8 @@ export interface Contributor {
   uploader_id: string;
   name: string;
   student_id: string;
+  department?: string;
+  program?: string;
   upload_count: number;
   avatar_url?: string;
   badge: 'Pioneer' | 'Master Contributor' | 'Scholar' | 'Rising Star';
