@@ -47,8 +47,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onNavigate('archive')}
             className="flex items-center gap-3 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-800 flex items-center justify-center shadow-lg shadow-purple-600/30 ring-1 ring-purple-400/30 group-hover:scale-105 transition-transform">
-              <Vault className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-lg shadow-purple-600/30 ring-1 ring-purple-400/30 group-hover:scale-105 transition-transform flex items-center justify-center shrink-0">
+              <img src="/logo.png" alt="EWUmate" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
