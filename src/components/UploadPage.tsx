@@ -23,6 +23,7 @@ import {
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { FILE_TYPES, getCategoryMeta } from '../types';
+import { computeFileHash } from '../lib/hash';
 
 interface UploadPageProps {
   user: User | null;
@@ -38,6 +39,8 @@ export interface CourseMaterialItem {
   progress: number;
   status: 'pending' | 'uploading' | 'saving' | 'done' | 'failed';
   error?: string;
+  isDuplicate?: boolean;
+  fileHash?: string;
 }
 
 export interface CourseUploadBlock {
@@ -419,63 +422,141 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         const cleanFaculty = course.facultyInitial.trim().replace(/[^a-zA-Z]/g, '').toUpperCase() || 'GENERAL';
 
         for (const item of course.materials) {
-          setCourses(prev => prev.map(c => {
-            if (c.id === course.id) {
-              return {
-                ...c,
-                materials: c.materials.map(m => m.id === item.id ? { ...m, status: 'uploading', progress: 25 } : m)
-              };
-            }
-            return c;
-          }));
-
-          let driveFileId = 'fallback-local-' + Date.now();
-          let driveAccountId = 'primary';
-
-          try {
-            const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-drive-upload-url', {
-              body: {
-                fileName: item.file.name,
-                fileSizeBytes: item.file.size,
-                mimeType: item.file.type || 'application/octet-stream'
-              }
-            });
-
-            if (!edgeError && edgeData?.uploadUrl) {
-              const driveRes = await fetch(edgeData.uploadUrl, {
-                method: 'PUT',
-                body: item.file
-              });
-
-              if (driveRes.ok) {
-                const resText = await driveRes.text();
-                try {
-                  const parsed = JSON.parse(resText);
-                  if (parsed.id) driveFileId = parsed.id;
-                } catch {
-                  const match = resText.match(/"id":\s*"([^"]+)"/);
-                  if (match) driveFileId = match[1];
-                }
-                if (edgeData.driveAccountId) driveAccountId = edgeData.driveAccountId;
-              }
-            }
-          } catch (edgeErr) {
-            console.warn('Drive upload fallback:', edgeErr);
+          // Skip already completed/verified items (prevents duplicate re-uploads when retrying interrupted batches)
+          if (item.status === 'done') {
+            completedFiles++;
+            setOverallProgress(Math.round((completedFiles / totalFiles) * 100));
+            continue;
           }
 
-          setCourses(prev => prev.map(c => {
-            if (c.id === course.id) {
-              return {
-                ...c,
-                materials: c.materials.map(m => m.id === item.id ? { ...m, status: 'saving', progress: 80 } : m)
-              };
-            }
-            return c;
-          }));
+          try {
+            // Step 1: Compute file SHA-256 hash
+            setCourses(prev => prev.map(c => {
+              if (c.id === course.id) {
+                return {
+                  ...c,
+                  materials: c.materials.map(m => m.id === item.id ? { ...m, status: 'uploading', progress: 15, error: undefined } : m)
+                };
+              }
+              return c;
+            }));
 
-          const { error: dbError } = await supabase
-            .from('study_materials')
-            .insert({
+            const fileHash = await computeFileHash(item.file);
+
+            // Step 2: Check for existing duplicate file in the vault
+            let existingRecord: any = null;
+
+            // Check A: by file_hash (if column exists)
+            try {
+              const { data: hashMatch, error: hashErr } = await supabase
+                .from('study_materials')
+                .select('id, drive_file_id, drive_account_id, file_name, course_code')
+                .eq('file_hash', fileHash)
+                .limit(1)
+                .maybeSingle();
+
+              if (!hashErr && hashMatch) {
+                existingRecord = hashMatch;
+              }
+            } catch {
+              // Ignore if column doesn't exist yet
+            }
+
+            // Check B: Fallback check by course + exact file_name + exact file_size_bytes
+            if (!existingRecord) {
+              try {
+                const { data: nameSizeMatch, error: nsErr } = await supabase
+                  .from('study_materials')
+                  .select('id, drive_file_id, drive_account_id, file_name, course_code')
+                  .eq('course_code', cleanCourse)
+                  .eq('file_name', item.file.name)
+                  .eq('file_size_bytes', item.file.size)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (!nsErr && nameSizeMatch) {
+                  existingRecord = nameSizeMatch;
+                }
+              } catch {
+                // Ignore fallback check failure
+              }
+            }
+
+            let driveFileId = 'fallback-local-' + Date.now();
+            let driveAccountId = 'primary';
+            let isDuplicate = false;
+
+            if (existingRecord) {
+              // File already uploaded to Drive previously! Reuse existing Drive file ID
+              driveFileId = existingRecord.drive_file_id || driveFileId;
+              driveAccountId = existingRecord.drive_account_id || driveAccountId;
+              isDuplicate = true;
+            } else {
+              // Step 3: Not duplicate -> Upload to Google Drive
+              setCourses(prev => prev.map(c => {
+                if (c.id === course.id) {
+                  return {
+                    ...c,
+                    materials: c.materials.map(m => m.id === item.id ? { ...m, progress: 45 } : m)
+                  };
+                }
+                return c;
+              }));
+
+              try {
+                const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-drive-upload-url', {
+                  body: {
+                    fileName: item.file.name,
+                    fileSizeBytes: item.file.size,
+                    fileHash: fileHash,
+                    courseCode: cleanCourse,
+                    mimeType: item.file.type || 'application/octet-stream'
+                  }
+                });
+
+                if (!edgeError && edgeData) {
+                  if (edgeData.isDuplicate && edgeData.driveFileId) {
+                    // Backend confirmed existing copy in Google Drive!
+                    driveFileId = edgeData.driveFileId;
+                    if (edgeData.driveAccountId) driveAccountId = edgeData.driveAccountId;
+                    isDuplicate = true;
+                  } else if (edgeData.uploadUrl) {
+                    const driveRes = await fetch(edgeData.uploadUrl, {
+                      method: 'PUT',
+                      body: item.file
+                    });
+
+                    if (driveRes.ok) {
+                      const resText = await driveRes.text();
+                      try {
+                        const parsed = JSON.parse(resText);
+                        if (parsed.id) driveFileId = parsed.id;
+                      } catch {
+                        const match = resText.match(/"id":\s*"([^"]+)"/);
+                        if (match) driveFileId = match[1];
+                      }
+                      if (edgeData.driveAccountId) driveAccountId = edgeData.driveAccountId;
+                    }
+                  }
+                }
+              } catch (edgeErr) {
+                console.warn('Drive upload fallback:', edgeErr);
+              }
+            }
+
+            // Step 4: Save record to study_materials
+            setCourses(prev => prev.map(c => {
+              if (c.id === course.id) {
+                return {
+                  ...c,
+                  materials: c.materials.map(m => m.id === item.id ? { ...m, status: 'saving', progress: 85 } : m)
+                };
+              }
+              return c;
+            }));
+
+            // Prepare insert payload (attempt with file_hash, fallback without if column not in DB schema)
+            const basePayload: any = {
               uploader_id: user.id,
               faculty_initial: cleanFaculty,
               course_code: cleanCourse,
@@ -486,34 +567,81 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               file_name: item.file.name,
               file_size_bytes: item.file.size,
               status: 'approved'
-            });
+            };
 
-          if (dbError) throw dbError;
-
-          completedFiles++;
-          setOverallProgress(Math.round((completedFiles / totalFiles) * 100));
-
-          setCourses(prev => prev.map(c => {
-            if (c.id === course.id) {
-              return {
-                ...c,
-                materials: c.materials.map(m => m.id === item.id ? { ...m, status: 'done', progress: 100 } : m)
-              };
+            let insertError: any = null;
+            try {
+              const { error } = await supabase
+                .from('study_materials')
+                .insert({ ...basePayload, file_hash: fileHash });
+              insertError = error;
+            } catch (err) {
+              insertError = err;
             }
-            return c;
-          }));
+
+            // If error was due to unknown column file_hash, retry without file_hash
+            if (insertError && (insertError.message?.includes('column "file_hash"') || insertError.code === '42703')) {
+              const { error: fallbackError } = await supabase
+                .from('study_materials')
+                .insert(basePayload);
+              insertError = fallbackError;
+            }
+
+            if (insertError) throw insertError;
+
+            completedFiles++;
+            setOverallProgress(Math.round((completedFiles / totalFiles) * 100));
+
+            setCourses(prev => prev.map(c => {
+              if (c.id === course.id) {
+                return {
+                  ...c,
+                  materials: c.materials.map(m => m.id === item.id ? { 
+                    ...m, 
+                    status: 'done', 
+                    progress: 100, 
+                    isDuplicate,
+                    fileHash 
+                  } : m)
+                };
+              }
+              return c;
+            }));
+
+          } catch (fileErr: any) {
+            console.error(`Error uploading ${item.file.name}:`, fileErr);
+            // Mark this specific item as failed so other files continue uninterrupted
+            setCourses(prev => prev.map(c => {
+              if (c.id === course.id) {
+                return {
+                  ...c,
+                  materials: c.materials.map(m => m.id === item.id ? { 
+                    ...m, 
+                    status: 'failed', 
+                    progress: 0,
+                    error: fileErr.message || 'Upload failed'
+                  } : m)
+                };
+              }
+              return c;
+            }));
+          }
         }
       }
 
       const activeCourseCount = courses.filter(c => c.materials.length > 0).length;
-      setSuccessReport({
-        totalFiles: completedFiles,
-        coursesCount: activeCourseCount
-      });
-      onUploadSuccess();
+      if (completedFiles > 0) {
+        setSuccessReport({
+          totalFiles: completedFiles,
+          coursesCount: activeCourseCount
+        });
+        onUploadSuccess();
+      } else {
+        setErrorMessage('None of the files could be uploaded. Please check your network and retry.');
+      }
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'Bulk upload encountered an error. Some items may need retry.');
+      setErrorMessage(err.message || 'Bulk upload encountered an error. Click retry to resume failed files.');
     } finally {
       setIsUploading(false);
     }
@@ -987,7 +1115,22 @@ const CourseBlockCard: React.FC<CourseBlockCardProps> = ({
                     ) : item.status === 'saving' ? (
                       <span className="text-[10px] text-amber-400 font-bold">Saving</span>
                     ) : item.status === 'done' ? (
-                      <Check className="w-4 h-4 text-emerald-400" />
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold">
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{item.isDuplicate ? 'Vault Linked' : 'Uploaded'}</span>
+                      </div>
+                    ) : item.status === 'failed' ? (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] font-bold" title={item.error}>
+                        <span>Failed</span>
+                        <button
+                          type="button"
+                          disabled={isUploading}
+                          onClick={() => onRemoveMaterial(item.id)}
+                          className="p-1 hover:text-white rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"

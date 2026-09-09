@@ -16,6 +16,7 @@ export interface StudyMaterial {
   drive_file_id: string;
   file_name: string;
   file_size_bytes?: number;
+  file_hash?: string;
   created_at: string;
   status: 'approved' | 'pending' | 'rejected';
   views_count?: number;

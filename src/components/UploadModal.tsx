@@ -17,6 +17,7 @@ import {
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { FILE_TYPES, getCategoryMeta } from '../types';
+import { computeFileHash } from '../lib/hash';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ interface UploadItem {
   progress: number;
   status: 'pending' | 'uploading' | 'saving' | 'done' | 'failed';
   error?: string;
+  isDuplicate?: boolean;
+  fileHash?: string;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
@@ -252,59 +255,130 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       for (let i = 0; i < uploadItems.length; i++) {
         const item = uploadItems[i];
 
-        // Mark item uploading
-        setUploadItems(prev => {
-          const next = [...prev];
-          next[i].status = 'uploading';
-          next[i].progress = 20;
-          return next;
-        });
-
-        let driveFileId = 'fallback-local-' + Date.now();
-        let driveAccountId = 'primary';
-
-        try {
-          const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-drive-upload-url', {
-            body: {
-              fileName: item.file.name,
-              fileSizeBytes: item.file.size,
-              mimeType: item.file.type || 'application/octet-stream'
-            }
-          });
-
-          if (!edgeError && edgeData?.uploadUrl) {
-            const driveRes = await fetch(edgeData.uploadUrl, {
-              method: 'PUT',
-              body: item.file
-            });
-
-            if (driveRes.ok) {
-              const resText = await driveRes.text();
-              try {
-                const parsed = JSON.parse(resText);
-                if (parsed.id) driveFileId = parsed.id;
-              } catch {
-                const match = resText.match(/"id":\s*"([^"]+)"/);
-                if (match) driveFileId = match[1];
-              }
-              if (edgeData.driveAccountId) driveAccountId = edgeData.driveAccountId;
-            }
-          }
-        } catch (edgeErr) {
-          console.warn('Direct drive edge invocation notice:', edgeErr);
+        // Skip already completed files (prevents duplicate re-uploads on retry)
+        if (item.status === 'done') {
+          completedCount++;
+          setOverallProgress(Math.round((completedCount / uploadItems.length) * 100));
+          continue;
         }
 
-        // Save metadata to study_materials with individual file's semester & file_type
-        setUploadItems(prev => {
-          const next = [...prev];
-          next[i].status = 'saving';
-          next[i].progress = 80;
-          return next;
-        });
+        try {
+          // Mark item uploading and compute hash
+          setUploadItems(prev => {
+            const next = [...prev];
+            next[i].status = 'uploading';
+            next[i].progress = 15;
+            next[i].error = undefined;
+            return next;
+          });
 
-        const { error: dbError } = await supabase
-          .from('study_materials')
-          .insert({
+          const fileHash = await computeFileHash(item.file);
+
+          // Check if file already exists in vault
+          let existingRecord: any = null;
+
+          // Check A: by file_hash
+          try {
+            const { data: hashMatch, error: hashErr } = await supabase
+              .from('study_materials')
+              .select('id, drive_file_id, drive_account_id, file_name, course_code')
+              .eq('file_hash', fileHash)
+              .limit(1)
+              .maybeSingle();
+
+            if (!hashErr && hashMatch) {
+              existingRecord = hashMatch;
+            }
+          } catch {
+            // Ignore column check fallback
+          }
+
+          // Check B: by course_code + file_name + file_size_bytes
+          if (!existingRecord) {
+            try {
+              const { data: nameMatch, error: nameErr } = await supabase
+                .from('study_materials')
+                .select('id, drive_file_id, drive_account_id, file_name, course_code')
+                .eq('course_code', cleanCourse)
+                .eq('file_name', item.file.name)
+                .eq('file_size_bytes', item.file.size)
+                .limit(1)
+                .maybeSingle();
+
+              if (!nameErr && nameMatch) {
+                existingRecord = nameMatch;
+              }
+            } catch {
+              // Ignore fallback check failure
+            }
+          }
+
+          let driveFileId = 'fallback-local-' + Date.now();
+          let driveAccountId = 'primary';
+          let isDuplicate = false;
+
+          if (existingRecord) {
+            // Duplicate detected -> Reuse Drive file ID, skip re-uploading file bytes
+            driveFileId = existingRecord.drive_file_id || driveFileId;
+            driveAccountId = existingRecord.drive_account_id || driveAccountId;
+            isDuplicate = true;
+          } else {
+            // Upload file to Google Drive
+            setUploadItems(prev => {
+              const next = [...prev];
+              next[i].progress = 45;
+              return next;
+            });
+
+            try {
+              const { data: edgeData, error: edgeError } = await supabase.functions.invoke('get-drive-upload-url', {
+                body: {
+                  fileName: item.file.name,
+                  fileSizeBytes: item.file.size,
+                  fileHash: fileHash,
+                  courseCode: cleanCourse,
+                  mimeType: item.file.type || 'application/octet-stream'
+                }
+              });
+
+              if (!edgeError && edgeData) {
+                if (edgeData.isDuplicate && edgeData.driveFileId) {
+                  driveFileId = edgeData.driveFileId;
+                  if (edgeData.driveAccountId) driveAccountId = edgeData.driveAccountId;
+                  isDuplicate = true;
+                } else if (edgeData.uploadUrl) {
+                  const driveRes = await fetch(edgeData.uploadUrl, {
+                    method: 'PUT',
+                    body: item.file
+                  });
+
+                  if (driveRes.ok) {
+                    const resText = await driveRes.text();
+                    try {
+                      const parsed = JSON.parse(resText);
+                      if (parsed.id) driveFileId = parsed.id;
+                    } catch {
+                      const match = resText.match(/"id":\s*"([^"]+)"/);
+                      if (match) driveFileId = match[1];
+                    }
+                    if (edgeData.driveAccountId) driveAccountId = edgeData.driveAccountId;
+                  }
+                }
+              }
+            } catch (edgeErr) {
+              console.warn('Direct drive edge invocation notice:', edgeErr);
+            }
+          }
+
+          // Save metadata to study_materials with individual file's semester & file_type
+          setUploadItems(prev => {
+            const next = [...prev];
+            next[i].status = 'saving';
+            next[i].progress = 85;
+            return next;
+          });
+
+          const basePayload: any = {
             uploader_id: user.id,
             faculty_initial: cleanFaculty || 'GENERAL',
             course_code: cleanCourse,
@@ -315,23 +389,58 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             file_name: item.file.name,
             file_size_bytes: item.file.size,
             status: 'approved'
+          };
+
+          let insertError: any = null;
+          try {
+            const { error } = await supabase
+              .from('study_materials')
+              .insert({ ...basePayload, file_hash: fileHash });
+            insertError = error;
+          } catch (err) {
+            insertError = err;
+          }
+
+          // Fallback if file_hash column is not present
+          if (insertError && (insertError.message?.includes('column "file_hash"') || insertError.code === '42703')) {
+            const { error: fallbackError } = await supabase
+              .from('study_materials')
+              .insert(basePayload);
+            insertError = fallbackError;
+          }
+
+          if (insertError) throw insertError;
+
+          completedCount++;
+          setUploadItems(prev => {
+            const next = [...prev];
+            next[i].status = 'done';
+            next[i].progress = 100;
+            next[i].isDuplicate = isDuplicate;
+            next[i].fileHash = fileHash;
+            return next;
           });
 
-        if (dbError) throw dbError;
-
-        completedCount++;
-        setUploadItems(prev => {
-          const next = [...prev];
-          next[i].status = 'done';
-          next[i].progress = 100;
-          return next;
-        });
-
-        setOverallProgress(Math.round((completedCount / uploadItems.length) * 100));
+          setOverallProgress(Math.round((completedCount / uploadItems.length) * 100));
+        } catch (itemErr: any) {
+          console.error(`Upload error for ${item.file.name}:`, itemErr);
+          // Mark this individual item as failed so other items can finish
+          setUploadItems(prev => {
+            const next = [...prev];
+            next[i].status = 'failed';
+            next[i].progress = 0;
+            next[i].error = itemErr.message || 'Upload failed';
+            return next;
+          });
+        }
       }
 
-      setSuccessCount(completedCount);
-      onUploadSuccess();
+      if (completedCount > 0) {
+        setSuccessCount(completedCount);
+        onUploadSuccess();
+      } else {
+        setErrorMessage('Failed to upload files. Please check your network and retry.');
+      }
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message || 'Bulk upload failed. Please try again.');
@@ -628,16 +737,39 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                               ))}
                             </select>
 
-                            {/* Remove button */}
-                            <button
-                              type="button"
-                              disabled={isUploading}
-                              onClick={() => removeFile(idx)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 transition-colors"
-                              title="Remove file"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {/* Remove or Status button */}
+                            {item.status === 'uploading' ? (
+                              <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                            ) : item.status === 'saving' ? (
+                              <span className="text-[10px] text-amber-400 font-bold">Saving</span>
+                            ) : item.status === 'done' ? (
+                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold">
+                                <Check className="w-3.5 h-3.5" />
+                                <span>{item.isDuplicate ? 'Linked' : 'Uploaded'}</span>
+                              </div>
+                            ) : item.status === 'failed' ? (
+                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] font-bold" title={item.error}>
+                                <span>Failed</span>
+                                <button
+                                  type="button"
+                                  disabled={isUploading}
+                                  onClick={() => removeFile(idx)}
+                                  className="p-0.5 hover:text-white"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isUploading}
+                                onClick={() => removeFile(idx)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 transition-colors"
+                                title="Remove file"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
