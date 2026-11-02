@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { validateAllowedEmail, extractStudentId } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -79,6 +80,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         options: {
           redirectTo: redirectTo,
           queryParams: {
+            hd: 'std.ewubd.edu',
             prompt: 'select_account'
           }
         }

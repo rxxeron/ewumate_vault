@@ -21,6 +21,8 @@ export interface StudyMaterial {
   status: 'approved' | 'pending' | 'rejected';
   views_count?: number;
   downloads_count?: number;
+  helpful_count?: number;
+  reports_count?: number;
 }
 
 export interface Contributor {
@@ -89,12 +91,21 @@ export const CATEGORY_COLOR_MAP: Record<string, string> = {
   'Other': 'bg-slate-500/10 text-slate-400 border-slate-500/30',
 };
 
-// Normalize legacy database plurals if needed, e.g. "Mid Questions" -> "Mid Question"
+// Normalize database plurals and cases to clean standard categories
 export const normalizeFileType = (typeStr: string): string => {
   if (!typeStr) return 'Other';
   const trimmed = typeStr.trim();
-  if (trimmed === 'Mid Questions') return 'Mid Question';
-  if (trimmed === 'Final Questions') return 'Final Question';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'mid questions' || lower === 'mid question') return 'Mid Question';
+  if (lower === 'final questions' || lower === 'final question') return 'Final Question';
+  if (lower === 'quiz question' || lower === 'quiz questions') return 'Quiz Questions';
+  if (lower === 'slides' || lower === 'slide') return 'Slide';
+  if (lower === 'lab reports' || lower === 'lab report') return 'Lab Report';
+  if (lower === 'lab manuals' || lower === 'lab manual') return 'Lab Manual';
+  if (lower === 'project reports' || lower === 'project report') return 'Project Report';
+  if (lower === 'lecture notes' || lower === 'lecture note') return 'Lecture Notes';
+  if (lower === 'assignments' || lower === 'assignment') return 'Assignment';
+  if (lower === 'assignment solutions' || lower === 'assignment solution') return 'Assignment Solution';
   return trimmed;
 };
 
@@ -105,4 +116,32 @@ export const getCategoryMeta = (fileType: string) => {
     label: norm,
     color: color
   };
+};
+
+// Validate institutional student email or administrative accounts
+export const validateAllowedEmail = (emailStr?: string | null): boolean => {
+  if (!emailStr) return false;
+  const trimmed = emailStr.trim().toLowerCase();
+
+  // 1. Institutional EWU student emails (e.g. 2022-1-60-123@std.ewubd.edu)
+  if (
+    /^[0-9]{4}-[1-3]-[0-9]{2}-[0-9]{3}@std\.ewubd\.edu$/.test(trimmed) ||
+    trimmed.endsWith('@std.ewubd.edu') ||
+    trimmed.endsWith('@ewubd.edu')
+  ) {
+    return true;
+  }
+
+  // 2. Authorized system admins
+  const adminEmails = [
+    'rhrakibulhasan279@gmail.com',
+    'rakibulhasan@ewubd.edu',
+    'rxxeron@gmail.com'
+  ];
+  return adminEmails.includes(trimmed);
+};
+
+export const extractStudentId = (emailStr?: string | null): string => {
+  if (!emailStr) return '';
+  return emailStr.split('@')[0];
 };

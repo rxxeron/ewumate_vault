@@ -313,13 +313,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             }
           }
 
-          let driveFileId = 'fallback-local-' + Date.now();
+          let driveFileId: string | null = null;
           let driveAccountId = 'primary';
           let isDuplicate = false;
 
           if (existingRecord) {
             // Duplicate detected -> Reuse Drive file ID, skip re-uploading file bytes
-            driveFileId = existingRecord.drive_file_id || driveFileId;
+            driveFileId = existingRecord.drive_file_id;
             driveAccountId = existingRecord.drive_account_id || driveAccountId;
             isDuplicate = true;
           } else {
@@ -368,6 +368,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             } catch (edgeErr) {
               console.warn('Direct drive edge invocation notice:', edgeErr);
             }
+          }
+
+          if (!driveFileId || driveFileId.startsWith('fallback-local-')) {
+            throw new Error('Google Drive upload failed or was rejected. Upload aborted.');
           }
 
           // Save metadata to study_materials with individual file's semester & file_type

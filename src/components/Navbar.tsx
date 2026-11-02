@@ -7,7 +7,8 @@ import {
   User, 
   LogOut, 
   Award, 
-  Archive
+  Archive,
+  Bookmark
 } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -23,6 +24,9 @@ interface NavbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   totalMaterialsCount: number;
+  savedCount?: number;
+  showSavedOnly?: boolean;
+  onToggleShowSaved?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -36,7 +40,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSignOut,
   searchQuery,
   onSearchChange,
-  totalMaterialsCount
+  totalMaterialsCount,
+  savedCount = 0,
+  showSavedOnly = false,
+  onToggleShowSaved
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-950/85 backdrop-blur-xl border-b border-slate-800/80 transition-all">
@@ -68,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => onNavigate('archive')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                currentView === 'archive'
+                currentView === 'archive' && !showSavedOnly
                   ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
@@ -76,6 +83,25 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Archive className="w-3.5 h-3.5" />
               <span>Archive</span>
             </button>
+
+            {/* Saved Bookmarks Navigation Tab */}
+            {savedCount > 0 && (
+              <button
+                onClick={() => {
+                  if (currentView !== 'archive') onNavigate('archive');
+                  onToggleShowSaved?.();
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  showSavedOnly && currentView === 'archive'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+                title="View your saved study materials"
+              >
+                <Bookmark className={`w-3.5 h-3.5 ${showSavedOnly ? 'fill-amber-400 text-amber-400' : 'text-amber-400'}`} />
+                <span>Saved ({savedCount})</span>
+              </button>
+            )}
 
             <button
               onClick={() => onNavigate('contributors')}

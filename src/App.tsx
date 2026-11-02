@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { StudyMaterial, Contributor } from './types';
-import { getCategoryMeta, normalizeFileType } from './types';
+import { getCategoryMeta, normalizeFileType, validateAllowedEmail } from './types';
 import { Navbar } from './components/Navbar';
 import { PromoBanner } from './components/PromoBanner';
 import { FilterSidebar } from './components/FilterSidebar';
@@ -43,6 +43,36 @@ export const App: React.FC = () => {
   const [selectedSemester, setSelectedSemester] = useState('all');
   const [selectedFaculty, setSelectedFaculty] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('ewumate_vault_bookmarks');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleBookmark = (id: string) => {
+    setBookmarkedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem('ewumate_vault_bookmarks', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+
+  const checkUserEmail = (u: User | null): User | null => {
+    if (u && !validateAllowedEmail(u.email)) {
+      supabase.auth.signOut();
+      alert('Access Restricted: Please sign in with your official East West University student email (@std.ewubd.edu).');
+      return null;
+    }
+    return u;
+  };
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -60,11 +90,11 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
+      setUser(checkUserEmail(session?.user || null));
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      setUser(checkUserEmail(session?.user || null));
     });
 
     fetchMaterials();
@@ -226,6 +256,7 @@ export const App: React.FC = () => {
   // Filtered materials
   const filteredMaterials = useMemo(() => {
     return materials.filter((m) => {
+      if (showSavedOnly && !bookmarkedIds.has(m.id)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesName = m.file_name.toLowerCase().includes(q);
@@ -240,12 +271,12 @@ export const App: React.FC = () => {
 
       return true;
     });
-  }, [materials, searchQuery, selectedCourse, selectedSemester, selectedFaculty, selectedCategory]);
+  }, [materials, searchQuery, selectedCourse, selectedSemester, selectedFaculty, selectedCategory, showSavedOnly, bookmarkedIds]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCourse, selectedSemester, selectedFaculty, selectedCategory]);
+  }, [searchQuery, selectedCourse, selectedSemester, selectedFaculty, selectedCategory, showSavedOnly]);
 
   // Paginated materials
   const totalPages = Math.max(1, Math.ceil(filteredMaterials.length / ITEMS_PER_PAGE));
@@ -260,6 +291,7 @@ export const App: React.FC = () => {
     setSelectedSemester('all');
     setSelectedFaculty('all');
     setSelectedCategory('all');
+    setShowSavedOnly(false);
     setCurrentPage(1);
   };
 
@@ -342,6 +374,9 @@ export const App: React.FC = () => {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         totalMaterialsCount={materials.length}
+        savedCount={bookmarkedIds.size}
+        showSavedOnly={showSavedOnly}
+        onToggleShowSaved={() => setShowSavedOnly((prev) => !prev)}
       />
 
       {/* 3. Conditional Page View */}
@@ -436,6 +471,9 @@ export const App: React.FC = () => {
                   availableFaculties={availableFaculties}
                   availableCategories={availableCategories}
                   totalCount={materials.length}
+                  savedCount={bookmarkedIds.size}
+                  showSavedOnly={showSavedOnly}
+                  onToggleShowSaved={() => setShowSavedOnly((prev) => !prev)}
                 />
               </div>
 
@@ -600,6 +638,8 @@ export const App: React.FC = () => {
                         <MaterialCard
                           key={item.id}
                           material={item}
+                          isBookmarked={bookmarkedIds.has(item.id)}
+                          onToggleBookmark={toggleBookmark}
                           onPreview={setPreviewMaterial}
                           onSelectCourse={setSelectedCourse}
                           onSelectFaculty={setSelectedFaculty}
@@ -793,6 +833,9 @@ export const App: React.FC = () => {
         availableFaculties={availableFaculties}
         availableCategories={availableCategories}
         totalCount={materials.length}
+        savedCount={bookmarkedIds.size}
+        showSavedOnly={showSavedOnly}
+        onToggleShowSaved={() => setShowSavedOnly((prev) => !prev)}
       />
 
       {/* Mobile Native-Style Bottom Navigation Bar */}

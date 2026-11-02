@@ -5,7 +5,8 @@ import {
   Calendar, 
   GraduationCap, 
   RotateCcw,
-  BookOpen
+  BookOpen,
+  Bookmark
 } from 'lucide-react';
 import { getCategoryMeta } from '../types';
 
@@ -24,6 +25,9 @@ interface FilterSidebarProps {
   availableFaculties: { initial: string; count: number }[];
   availableCategories: { type: string; count: number }[];
   totalCount: number;
+  savedCount?: number;
+  showSavedOnly?: boolean;
+  onToggleShowSaved?: () => void;
 }
 
 export const FilterSidebar: React.FC<FilterSidebarProps> = ({
@@ -40,13 +44,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   availableSemesters,
   availableFaculties,
   availableCategories,
-  totalCount
+  totalCount,
+  savedCount = 0,
+  showSavedOnly = false,
+  onToggleShowSaved
 }) => {
   const isFiltered = 
     selectedCourse !== 'all' || 
     selectedSemester !== 'all' || 
     selectedFaculty !== 'all' || 
-    selectedCategory !== 'all';
+    selectedCategory !== 'all' ||
+    showSavedOnly;
 
   return (
     <aside className="w-full lg:w-72 shrink-0 space-y-6">
@@ -69,6 +77,26 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
           </button>
         )}
       </div>
+
+      {/* Saved Bookmarks Quick Toggle */}
+      {savedCount > 0 && (
+        <button
+          onClick={onToggleShowSaved}
+          className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-xs font-bold transition-all ${
+            showSavedOnly
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
+              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800 text-slate-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Bookmark className={`w-4 h-4 ${showSavedOnly ? 'fill-amber-400 text-amber-400' : 'text-amber-400'}`} />
+            <span>Saved Bookmarks</span>
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[11px] font-black">
+            {savedCount}
+          </span>
+        </button>
+      )}
 
       {/* Material Types Filter */}
       <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-3">

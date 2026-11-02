@@ -482,13 +482,13 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               }
             }
 
-            let driveFileId = 'fallback-local-' + Date.now();
+            let driveFileId: string | null = null;
             let driveAccountId = 'primary';
             let isDuplicate = false;
 
             if (existingRecord) {
               // File already uploaded to Drive previously! Reuse existing Drive file ID
-              driveFileId = existingRecord.drive_file_id || driveFileId;
+              driveFileId = existingRecord.drive_file_id;
               driveAccountId = existingRecord.drive_account_id || driveAccountId;
               isDuplicate = true;
             } else {
@@ -542,6 +542,10 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               } catch (edgeErr) {
                 console.warn('Drive upload fallback:', edgeErr);
               }
+            }
+
+            if (!driveFileId || driveFileId.startsWith('fallback-local-')) {
+              throw new Error('Google Drive upload failed or was rejected. Upload aborted.');
             }
 
             // Step 4: Save record to study_materials

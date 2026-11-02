@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Download, 
   Eye, 
@@ -7,13 +7,18 @@ import {
   Calendar, 
   User, 
   HardDrive,
-  BookOpen
+  BookOpen,
+  Bookmark,
+  ThumbsUp
 } from 'lucide-react';
 import type { StudyMaterial } from '../types';
 import { getCategoryMeta } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface MaterialCardProps {
   material: StudyMaterial;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (materialId: string) => void;
   onPreview: (material: StudyMaterial) => void;
   onSelectCourse: (course: string) => void;
   onSelectFaculty: (faculty: string) => void;
@@ -22,11 +27,62 @@ interface MaterialCardProps {
 
 export const MaterialCard: React.FC<MaterialCardProps> = ({
   material,
+  isBookmarked = false,
+  onToggleBookmark,
   onPreview,
   onSelectCourse,
   onSelectFaculty,
   onOpenContributor
 }) => {
+  const [helpfulCount, setHelpfulCount] = useState<number>(material.helpful_count || 0);
+  const [hasVotedHelpful, setHasVotedHelpful] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const voted = localStorage.getItem(`ewumate_vault_helpful_${material.id}`);
+      if (voted === 'true') {
+        setHasVotedHelpful(true);
+      }
+    } catch {}
+  }, [material.id]);
+
+  const handleHelpfulClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasVotedHelpful) return;
+
+    setHasVotedHelpful(true);
+    setHelpfulCount(prev => prev + 1);
+
+    try {
+      localStorage.setItem(`ewumate_vault_helpful_${material.id}`, 'true');
+      await supabase.rpc('increment_material_stat', {
+        material_id: material.id,
+        stat_type: 'helpful'
+      });
+    } catch (err) {
+      console.warn('Could not record helpful vote:', err);
+    }
+  };
+
+  const handleDownloadClick = async () => {
+    try {
+      await supabase.rpc('increment_material_stat', {
+        material_id: material.id,
+        stat_type: 'download'
+      });
+    } catch {}
+  };
+
+  const handlePreviewClick = () => {
+    onPreview(material);
+    try {
+      supabase.rpc('increment_material_stat', {
+        material_id: material.id,
+        stat_type: 'view'
+      }).then(() => {});
+    } catch {}
+  };
+
   const formatBytes = (bytes?: number) => {
     if (!bytes || bytes === 0) return 'File';
     const k = 1024;
@@ -48,22 +104,42 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
   return (
     <div className="group relative flex flex-col justify-between p-5 rounded-3xl bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-purple-500/40 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-purple-950/30">
       <div>
-        {/* Top Header: Category Tag & Semester */}
+        {/* Top Header: Category Tag & Semester & Bookmark */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black border ${categoryMeta.color}`}>
             <FileText className="w-3.5 h-3.5" />
             <span>{categoryMeta.label}</span>
           </span>
 
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded-md">
-            <Calendar className="w-3 h-3 text-emerald-400" />
-            <span>{formatSemester(material.semester)}</span>
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded-md">
+              <Calendar className="w-3 h-3 text-emerald-400" />
+              <span>{formatSemester(material.semester)}</span>
+            </span>
+
+            {onToggleBookmark && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleBookmark(material.id);
+                }}
+                className={`p-1.5 rounded-lg border transition-all ${
+                  isBookmarked
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm'
+                    : 'bg-slate-800/60 text-slate-400 hover:text-white border-slate-700/60 hover:bg-slate-800'
+                }`}
+                title={isBookmarked ? 'Remove from Saved Bookmarks' : 'Save material for quick study'}
+              >
+                <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-amber-400' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* File Name */}
         <h3 
-          onClick={() => onPreview(material)}
+          onClick={handlePreviewClick}
           className="font-bold text-base text-slate-100 group-hover:text-purple-300 transition-colors cursor-pointer line-clamp-2 leading-snug mb-3"
           title={material.file_name}
         >
@@ -99,9 +175,9 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
         </div>
       </div>
 
-      {/* Footer: Contributor & Direct Actions */}
+      {/* Footer: Contributor, Helpful Counter & Actions */}
       <div className="pt-3.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
-        <div className="text-[11px] text-slate-400 truncate max-w-[170px]">
+        <div className="text-[11px] text-slate-400 truncate max-w-[150px]">
           {material.uploader_name && material.uploader_id ? (
             <button
               onClick={() => onOpenContributor(material.uploader_id!, material.uploader_name!)}
@@ -124,8 +200,24 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Helpful Upvote Button */}
           <button
-            onClick={() => onPreview(material)}
+            type="button"
+            onClick={handleHelpfulClick}
+            disabled={hasVotedHelpful}
+            className={`px-2 py-1 rounded-xl border text-[11px] font-bold flex items-center gap-1 transition-all ${
+              hasVotedHelpful
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
+                : 'bg-slate-800/60 hover:bg-emerald-500/15 text-slate-400 hover:text-emerald-400 border-slate-700/60'
+            }`}
+            title={hasVotedHelpful ? 'You marked this as helpful' : 'Mark as helpful for other students'}
+          >
+            <ThumbsUp className={`w-3 h-3 ${hasVotedHelpful ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+            <span>{helpfulCount > 0 ? helpfulCount : 'Helpful'}</span>
+          </button>
+
+          <button
+            onClick={handlePreviewClick}
             className="p-2 rounded-xl bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 transition-all text-xs font-bold flex items-center gap-1"
             title="Preview file in browser"
           >
@@ -137,6 +229,7 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
             href={downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={handleDownloadClick}
             className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-600 transition-all text-xs font-black flex items-center gap-1 shadow-sm"
             title="Download file directly"
           >
