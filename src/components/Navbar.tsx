@@ -70,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Navigation View Switcher */}
+          {/* Navigation View Switcher (Clean 3-Tab structure) */}
           <nav className="hidden sm:flex items-center gap-1 ml-4 pl-4 border-l border-slate-800">
             <button
               onClick={() => onNavigate('archive')}
@@ -83,25 +83,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Archive className="w-3.5 h-3.5" />
               <span>Archive</span>
             </button>
-
-            {/* Saved Bookmarks Navigation Tab */}
-            {savedCount > 0 && (
-              <button
-                onClick={() => {
-                  if (currentView !== 'archive') onNavigate('archive');
-                  onToggleShowSaved?.();
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                  showSavedOnly && currentView === 'archive'
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-                title="View your saved study materials"
-              >
-                <Bookmark className={`w-3.5 h-3.5 ${showSavedOnly ? 'fill-amber-400 text-amber-400' : 'text-amber-400'}`} />
-                <span>Saved ({savedCount})</span>
-              </button>
-            )}
 
             <button
               onClick={() => onNavigate('contributors')}
@@ -146,7 +127,26 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Nav Actions */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* Quick Bookmarks Toggle (if any saved) */}
+          {savedCount > 0 && (
+            <button
+              onClick={() => {
+                if (currentView !== 'archive') onNavigate('archive');
+                onToggleShowSaved?.();
+              }}
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                showSavedOnly && currentView === 'archive'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
+              }`}
+              title={showSavedOnly ? 'Showing saved materials (click to show all)' : 'Filter by saved materials'}
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${showSavedOnly ? 'fill-amber-400 text-amber-400' : 'text-amber-400'}`} />
+              <span className="font-mono text-[11px] font-black">{savedCount}</span>
+            </button>
+          )}
+
           {/* EWUmate App CTA */}
           <button
             onClick={onOpenAppModal}

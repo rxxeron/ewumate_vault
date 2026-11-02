@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Download, ExternalLink, FileText, Flag, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Download, ExternalLink, FileText, Flag, AlertTriangle, CheckCircle2, ThumbsUp } from 'lucide-react';
 import type { StudyMaterial } from '../types';
 import { getCategoryMeta } from '../types';
 import { supabase } from '../lib/supabase';
@@ -13,11 +13,18 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ material, on
   const [hasReported, setHasReported] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
   const [showReportSuccess, setShowReportSuccess] = useState(false);
+  const [hasVotedHelpful, setHasVotedHelpful] = useState(false);
 
   useEffect(() => {
     if (material?.id) {
       setHasReported(false);
       setShowReportSuccess(false);
+
+      try {
+        const voted = localStorage.getItem(`ewumate_vault_helpful_${material.id}`);
+        if (voted === 'true') setHasVotedHelpful(true);
+      } catch {}
+
       // Track view count
       supabase.rpc('increment_material_stat', {
         material_id: material.id,
@@ -37,6 +44,18 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ material, on
       material_id: material.id,
       stat_type: 'download'
     }).then(() => {});
+  };
+
+  const handleHelpful = async () => {
+    if (hasVotedHelpful) return;
+    setHasVotedHelpful(true);
+    try {
+      localStorage.setItem(`ewumate_vault_helpful_${material.id}`, 'true');
+      await supabase.rpc('increment_material_stat', {
+        material_id: material.id,
+        stat_type: 'helpful'
+      });
+    } catch {}
   };
 
   const handleReport = async () => {
@@ -80,6 +99,22 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ material, on
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Helpful Upvote Button */}
+            <button
+              type="button"
+              onClick={handleHelpful}
+              disabled={hasVotedHelpful}
+              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                hasVotedHelpful
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
+                  : 'bg-slate-800/80 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 border-slate-700/60'
+              }`}
+              title={hasVotedHelpful ? 'You marked this as helpful' : 'Mark as helpful'}
+            >
+              <ThumbsUp className={`w-3.5 h-3.5 ${hasVotedHelpful ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+              <span className="hidden sm:inline">{hasVotedHelpful ? 'Helpful' : 'Helpful'}</span>
+            </button>
+
             {/* Report Button */}
             <button
               type="button"
