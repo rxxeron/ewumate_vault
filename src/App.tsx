@@ -400,7 +400,7 @@ export const App: React.FC = () => {
         /* Archive Explorer View */
         <>
           {/* Hero Header Section */}
-          <section className="relative pt-6 sm:pt-10 pb-5 sm:pb-8 px-4 sm:px-6 max-w-7xl mx-auto w-full overflow-hidden">
+          <section className="relative pt-6 sm:pt-10 pb-5 sm:pb-8 px-4 sm:px-6 max-w-7xl 2xl:max-w-screen-2xl mx-auto w-full overflow-hidden">
             <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute top-10 right-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -452,7 +452,7 @@ export const App: React.FC = () => {
           </section>
 
           {/* Main Explorer Layout */}
-          <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-24 sm:pb-16">
+          <main className="flex-1 max-w-7xl 2xl:max-w-screen-2xl mx-auto w-full px-4 sm:px-6 pb-24 sm:pb-16">
             <div className="flex flex-col lg:flex-row gap-8 items-start">
               {/* Desktop Sidebar Filter Panel */}
               <div className="hidden lg:block w-72 shrink-0">
@@ -734,7 +734,7 @@ export const App: React.FC = () => {
 
       {/* 4. Footer */}
       <footer className="mt-auto border-t border-slate-800/80 bg-slate-950 py-8 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black text-sm">
               EM

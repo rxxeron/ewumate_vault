@@ -75,8 +75,8 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
 
   return (
     <div className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-3xl bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-purple-500/40 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-purple-950/30 overflow-hidden">
-      <div>
-        {/* Top Header: Category Tag on left & Bookmark on right */}
+      <div className="flex-1 flex flex-col">
+        {/* Top Header: Category Tag & Bookmark */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black border ${categoryMeta.color} max-w-[calc(100%-40px)]`}>
             <FileText className="w-3.5 h-3.5 shrink-0" />
@@ -105,14 +105,46 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
         {/* File Name */}
         <h3 
           onClick={handlePreviewClick}
-          className="font-bold text-base text-slate-100 group-hover:text-purple-300 transition-colors cursor-pointer line-clamp-2 leading-snug mb-3.5"
+          className="font-bold text-base text-slate-100 group-hover:text-purple-300 transition-colors cursor-pointer line-clamp-2 leading-snug mb-3"
           title={material.file_name}
         >
           {material.file_name}
         </h3>
 
+        {/* Contributor Row (Full width, clear & legible) */}
+        <div className="mb-3.5">
+          {material.uploader_name && material.uploader_id ? (
+            <button
+              onClick={() => onOpenContributor(material.uploader_id!, material.uploader_name!)}
+              className="flex items-center gap-2 text-left hover:text-purple-300 transition-colors group/contrib max-w-full"
+              title={`View ${material.uploader_name}'s profile & contributions`}
+            >
+              <div className="w-6 h-6 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 group-hover/contrib:border-purple-400 group-hover/contrib:scale-105 transition-all">
+                <User className="w-3 h-3 text-purple-300" />
+              </div>
+              <div className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-xs text-slate-200 group-hover/contrib:text-purple-300 truncate block leading-tight">
+                  {material.uploader_name}
+                </span>
+                {material.uploader_department && (
+                  <span className="text-[10px] text-slate-400 truncate block leading-tight mt-0.5">
+                    {material.uploader_department.replace('Department of ', '')}
+                  </span>
+                )}
+              </div>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 text-slate-400">
+              <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center shrink-0">
+                <User className="w-3 h-3 text-slate-400" />
+              </div>
+              <span className="text-xs italic text-slate-400 truncate">EWU Community</span>
+            </div>
+          )}
+        </div>
+
         {/* Interactive Tags: Course Code, Faculty Initial, Semester & File Size */}
-        <div className="flex flex-wrap items-center gap-1.5 mb-4">
+        <div className="flex flex-wrap items-center gap-1.5 mb-4 mt-auto">
           <button
             onClick={() => onSelectCourse(material.course_code)}
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-xs font-mono font-black uppercase transition-colors"
@@ -161,61 +193,28 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
         </div>
       </div>
 
-      {/* Footer: Contributor & Direct Actions */}
-      <div className="pt-3.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          {material.uploader_name && material.uploader_id ? (
-            <button
-              onClick={() => onOpenContributor(material.uploader_id!, material.uploader_name!)}
-              className="flex items-center gap-1.5 text-left hover:text-purple-300 transition-colors group/contrib max-w-full"
-              title={`View ${material.uploader_name}'s profile & contributions`}
-            >
-              <div className="w-6 h-6 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 group-hover/contrib:border-purple-400 group-hover/contrib:scale-105 transition-all">
-                <User className="w-3 h-3 text-purple-300" />
-              </div>
-              <div className="min-w-0 flex-1 truncate">
-                <span className="font-semibold text-xs text-slate-200 group-hover/contrib:text-purple-300 truncate block leading-tight">
-                  {material.uploader_name}
-                </span>
-                {material.uploader_department && (
-                  <span className="text-[10px] text-slate-400 truncate block leading-tight">
-                    {material.uploader_department.replace('Department of ', '')}
-                  </span>
-                )}
-              </div>
-            </button>
-          ) : (
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center shrink-0">
-                <User className="w-3 h-3 text-slate-400" />
-              </div>
-              <span className="text-xs italic text-slate-400 truncate">EWU Community</span>
-            </div>
-          )}
-        </div>
+      {/* Footer: Direct Action Buttons (Symmetrical 2-Column Grid) */}
+      <div className="pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 mt-auto">
+        <button
+          onClick={handlePreviewClick}
+          className="py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-purple-600 hover:text-white text-slate-300 transition-all text-xs font-bold flex items-center justify-center gap-1.5 border border-slate-700/60 hover:border-purple-600 shadow-sm"
+          title="Preview file in browser"
+        >
+          <Eye className="w-3.5 h-3.5 shrink-0" />
+          <span>Preview</span>
+        </button>
 
-        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-          <button
-            onClick={handlePreviewClick}
-            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 transition-all text-xs font-bold flex items-center gap-1 border border-slate-700/50 hover:border-purple-600"
-            title="Preview file in browser"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Preview</span>
-          </button>
-
-          <a
-            href={downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleDownloadClick}
-            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-600 transition-all text-xs font-black flex items-center gap-1 shadow-sm"
-            title="Download file directly"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Download</span>
-          </a>
-        </div>
+        <a
+          href={downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleDownloadClick}
+          className="py-2 px-3 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 hover:border-purple-600 transition-all text-xs font-black flex items-center justify-center gap-1.5 shadow-sm"
+          title="Download file directly"
+        >
+          <Download className="w-3.5 h-3.5 shrink-0" />
+          <span>Download</span>
+        </a>
       </div>
     </div>
   );
