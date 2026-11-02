@@ -22,6 +22,7 @@ interface MaterialCardProps {
   onPreview: (material: StudyMaterial) => void;
   onSelectCourse: (course: string) => void;
   onSelectFaculty: (faculty: string) => void;
+  onSelectSemester?: (semester: string) => void;
   onOpenContributor: (uploaderId: string, name: string) => void;
 }
 
@@ -32,6 +33,7 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
   onPreview,
   onSelectCourse,
   onSelectFaculty,
+  onSelectSemester,
   onOpenContributor
 }) => {
   const handleDownloadClick = () => {
@@ -72,52 +74,45 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
   const downloadUrl = `https://drive.google.com/uc?export=download&id=${material.drive_file_id}`;
 
   return (
-    <div className="group relative flex flex-col justify-between p-5 rounded-3xl bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-purple-500/40 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-purple-950/30">
+    <div className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-3xl bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-purple-500/40 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-purple-950/30 overflow-hidden">
       <div>
-        {/* Top Header: Category Tag & Semester & Bookmark */}
+        {/* Top Header: Category Tag on left & Bookmark on right */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black border ${categoryMeta.color}`}>
-            <FileText className="w-3.5 h-3.5" />
-            <span>{categoryMeta.label}</span>
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black border ${categoryMeta.color} max-w-[calc(100%-40px)]`}>
+            <FileText className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{categoryMeta.label}</span>
           </span>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md">
-              <Calendar className="w-3 h-3 text-emerald-400" />
-              <span>{formatSemester(material.semester)}</span>
-            </span>
-
-            {onToggleBookmark && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleBookmark(material.id);
-                }}
-                className={`p-1.5 rounded-lg transition-all ${
-                  isBookmarked
-                    ? 'text-amber-400 bg-amber-400/15'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
-                }`}
-                title={isBookmarked ? 'Remove bookmark' : 'Bookmark this material'}
-              >
-                <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-amber-400' : ''}`} />
-              </button>
-            )}
-          </div>
+          {onToggleBookmark && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleBookmark(material.id);
+              }}
+              className={`p-1.5 rounded-lg border transition-all shrink-0 ${
+                isBookmarked
+                  ? 'bg-amber-400/20 text-amber-400 border-amber-400/40 shadow-sm'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white border-slate-700/60 hover:bg-slate-800'
+              }`}
+              title={isBookmarked ? 'Remove bookmark' : 'Bookmark this material'}
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-amber-400' : ''}`} />
+            </button>
+          )}
         </div>
 
         {/* File Name */}
         <h3 
           onClick={handlePreviewClick}
-          className="font-bold text-base text-slate-100 group-hover:text-purple-300 transition-colors cursor-pointer line-clamp-2 leading-snug mb-3"
+          className="font-bold text-base text-slate-100 group-hover:text-purple-300 transition-colors cursor-pointer line-clamp-2 leading-snug mb-3.5"
           title={material.file_name}
         >
           {material.file_name}
         </h3>
 
-        {/* Interactive Tags: Course Code & Faculty Initial */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* Interactive Tags: Course Code, Faculty Initial, Semester & File Size */}
+        <div className="flex flex-wrap items-center gap-1.5 mb-4">
           <button
             onClick={() => onSelectCourse(material.course_code)}
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-xs font-mono font-black uppercase transition-colors"
@@ -138,6 +133,19 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
             </button>
           )}
 
+          {material.semester && (
+            <button
+              onClick={() => onSelectSemester ? onSelectSemester(material.semester) : undefined}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-semibold transition-colors ${
+                onSelectSemester ? 'hover:bg-emerald-500/20 cursor-pointer' : ''
+              }`}
+              title={onSelectSemester ? `Filter by semester ${formatSemester(material.semester)}` : formatSemester(material.semester)}
+            >
+              <Calendar className="w-3 h-3 text-emerald-400" />
+              <span>{formatSemester(material.semester)}</span>
+            </button>
+          )}
+
           {/* Social Proof (if upvotes exist) */}
           {(material.helpful_count || 0) > 0 && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
@@ -147,7 +155,7 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
           )}
 
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 ml-auto">
-            <HardDrive className="w-3 h-3 text-slate-400" />
+            <HardDrive className="w-3 h-3 text-slate-500" />
             {formatBytes(material.file_size_bytes)}
           </span>
         </div>
@@ -155,32 +163,41 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
 
       {/* Footer: Contributor & Direct Actions */}
       <div className="pt-3.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
-        <div className="text-[11px] text-slate-400 truncate max-w-[140px]">
+        <div className="min-w-0 flex-1">
           {material.uploader_name && material.uploader_id ? (
             <button
               onClick={() => onOpenContributor(material.uploader_id!, material.uploader_name!)}
-              className="flex items-center gap-1 text-left hover:text-purple-300 transition-colors group/contrib truncate"
+              className="flex items-center gap-1.5 text-left hover:text-purple-300 transition-colors group/contrib max-w-full"
               title={`View ${material.uploader_name}'s profile & contributions`}
             >
-              <User className="w-3 h-3 text-purple-400 shrink-0 group-hover/contrib:scale-110 transition-transform" />
-              <div className="truncate">
-                <span className="font-semibold truncate block">{material.uploader_name}</span>
+              <div className="w-6 h-6 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 group-hover/contrib:border-purple-400 group-hover/contrib:scale-105 transition-all">
+                <User className="w-3 h-3 text-purple-300" />
+              </div>
+              <div className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-xs text-slate-200 group-hover/contrib:text-purple-300 truncate block leading-tight">
+                  {material.uploader_name}
+                </span>
                 {material.uploader_department && (
-                  <span className="text-[10px] text-cyan-400/80 truncate block">
+                  <span className="text-[10px] text-slate-400 truncate block leading-tight">
                     {material.uploader_department.replace('Department of ', '')}
                   </span>
                 )}
               </div>
             </button>
           ) : (
-            <span className="italic text-slate-400">EWU Community</span>
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center shrink-0">
+                <User className="w-3 h-3 text-slate-400" />
+              </div>
+              <span className="text-xs italic text-slate-400 truncate">EWU Community</span>
+            </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
           <button
             onClick={handlePreviewClick}
-            className="p-2 rounded-xl bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 transition-all text-xs font-bold flex items-center gap-1"
+            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-purple-600 hover:text-white text-slate-300 transition-all text-xs font-bold flex items-center gap-1 border border-slate-700/50 hover:border-purple-600"
             title="Preview file in browser"
           >
             <Eye className="w-3.5 h-3.5" />
@@ -192,7 +209,7 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleDownloadClick}
-            className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-600 transition-all text-xs font-black flex items-center gap-1 shadow-sm"
+            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-600 transition-all text-xs font-black flex items-center gap-1 shadow-sm"
             title="Download file directly"
           >
             <Download className="w-3.5 h-3.5" />

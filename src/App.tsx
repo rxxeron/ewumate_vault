@@ -626,14 +626,14 @@ export const App: React.FC = () => {
 
                 {/* Grid */}
                 {isLoading ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                     {[1, 2, 3, 4, 5, 6].map((n) => (
                       <div key={n} className="h-48 rounded-3xl bg-slate-900/40 border border-slate-800 animate-pulse" />
                     ))}
                   </div>
                 ) : paginatedMaterials.length > 0 ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                       {paginatedMaterials.map((item) => (
                         <MaterialCard
                           key={item.id}
@@ -643,6 +643,7 @@ export const App: React.FC = () => {
                           onPreview={setPreviewMaterial}
                           onSelectCourse={setSelectedCourse}
                           onSelectFaculty={setSelectedFaculty}
+                          onSelectSemester={setSelectedSemester}
                           onOpenContributor={handleOpenContributorFromCard}
                         />
                       ))}
